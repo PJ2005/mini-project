@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package edgemesh;
+
+option go_package = "edgemesh/internal/canonical";
+
+message TelemetryPayload {
+  string metric    = 1;
+  double value     = 2;
+  string unit      = 3;
+}
+
+message CommandPayload {
+  string action    = 1;
+  bytes  params    = 2;
+}
+
+message EventPayload {
+  string event_type = 1;
+  string severity   = 2;
+  string detail     = 3;
+}
+
+message Message {
+  string message_id    = 1;
+  string device_id     = 2;
+  int64  timestamp_ms  = 3;
+  string source_proto  = 4;
+
+  oneof payload {
+    TelemetryPayload telemetry = 10;
+    CommandPayload   command   = 11;
+    EventPayload     event     = 12;
+  }
+
+  map<string, string> metadata = 20;
+}

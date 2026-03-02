@@ -1,0 +1,44 @@
+# EdgeMesh Gateway Configuration
+
+nats:
+  # NATS server URL. Use nats:// for plain, tls:// for encrypted connections.
+  url: "nats://127.0.0.1:4222"
+
+mqtt:
+  # MQTT broker address including port.
+  broker: "tcp://127.0.0.1:1883"
+  # Client ID must be unique per gateway instance to avoid session conflicts.
+  client_id: "edgemesh-gw-01"
+  # Topic filter for inbound device messages. '#' is a multi-level wildcard.
+  topic: "devices/#"
+  # Quality of Service: 0 = at most once, 1 = at least once, 2 = exactly once.
+  qos: 1
+  # Index of device_id in topic split by '/'. For "devices/sensor-42", index 1 = "sensor-42".
+  device_id_topic_index: 1
+
+http:
+  # Listen address for the HTTP adapter (ingest + consumer API).
+  listen: ":8080"
+
+registry:
+  # SQLite database file path. Created automatically on first run.
+  db_path: "./edgemesh.db"
+
+policy:
+  # Default action when no rule matches: "allow" or "deny".
+  default_action: "allow"
+  # Rules evaluated top-to-bottom, first match wins.
+  rules:
+    - device_pattern: "*"
+      source_proto: "*"
+      message_type: "telemetry"
+      action: "allow"
+    - device_pattern: "*"
+      source_proto: "*"
+      message_type: "command"
+      action: "allow"
+    - device_pattern: "*"
+      source_proto: "*"
+      message_type: "event"
+      action: "allow"
+
