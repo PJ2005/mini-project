@@ -13,7 +13,7 @@ A lightweight IoT interoperability middleware that bridges MQTT, HTTP, and CoAP 
       ▼               │  iot.command.<device>    │    ingest   │      │ consume
  ┌─────────┐ publish  │  iot.event.<device>      │◄────────────┘      │
  │  MQTT   │─────────►│                          │────────────────────┘
- │ Adapter │          │     Policy Engine         │
+ │ Adapter │          │     Policy Engine        │
  └─────────┘          │     (interceptor)        │
                       │                          │
  ┌─────────┐ publish  │                          │
