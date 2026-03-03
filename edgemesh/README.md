@@ -1,6 +1,6 @@
 # EdgeMesh
 
-A lightweight IoT interoperability middleware that bridges MQTT and HTTP devices through a canonical Protobuf model over a NATS message bus. Designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing matter.
+A lightweight IoT interoperability middleware that bridges MQTT, HTTP, and CoAP devices through a canonical Protobuf model over a NATS message bus. Designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing matter.
 
 ## Architecture
 
@@ -15,7 +15,11 @@ A lightweight IoT interoperability middleware that bridges MQTT and HTTP devices
  │  MQTT   │─────────►│                          │────────────────────┘
  │ Adapter │          │     Policy Engine         │
  └─────────┘          │     (interceptor)        │
-                      └──────────┬───────────────┘
+                      │                          │
+ ┌─────────┐ publish  │                          │
+ │  CoAP   │─────────►│                          │
+ │ Adapter │  (UDP)   │                          │
+ └─────────┘          └──────────┬───────────────┘
                                  │
                       ┌──────────▼───────────────┐
                       │     SQLite Registry      │
@@ -27,6 +31,7 @@ A lightweight IoT interoperability middleware that bridges MQTT and HTTP devices
 
 ```bash
 # Prerequisites: Go 1.22+, NATS server, MQTT broker (e.g. Mosquitto)
+# Optional: coap-client (libcoap) for CoAP testing
 
 # 1. Clone and build
 git clone <repo-url> && cd edgemesh
@@ -61,7 +66,14 @@ curl -X POST http://localhost:8080/ingest/v1/pump-01/telemetry \
   -d '{"metric":"pressure","value":4.2,"unit":"bar"}'
 ```
 
-**Terminal 3 — Consume via HTTP API:**
+**Terminal 3 — Send telemetry via CoAP (UDP):**
+```bash
+# CoAP: publish humidity from sensor-99
+coap-client -m post coap://localhost:5683/telemetry/sensor-99 \
+  -e '{"metric":"humidity","value":62.1,"unit":"%"}'
+```
+
+**Terminal 4 — Consume via HTTP API:**
 ```bash
 # Get latest message for sensor-42 (arrived via MQTT)
 curl http://localhost:8080/api/v1/devices/sensor-42/latest
@@ -92,7 +104,8 @@ edgemesh/
 │   ├── adapter/
 │   │   ├── adapter.go               # Adapter interface + ConverterFunc type
 │   │   ├── mqtt/mqtt.go             # MQTT inbound adapter (Paho client)
-│   │   └── http/http.go             # HTTP ingest + consumer API adapter
+│   │   ├── http/http.go             # HTTP ingest + consumer API adapter
+│   │   └── coap/coap.go             # CoAP inbound adapter (UDP, RFC 7252)
 │   ├── bus/bus.go                    # MessageBus interface + NATS implementation
 │   ├── canonical/
 │   │   ├── canonical.pb.go          # Generated Protobuf types
@@ -109,5 +122,6 @@ edgemesh/
     ├── ADAPTER.md                    # How to add a new adapter
     ├── REGISTRY.md                   # Device registry documentation
     ├── POLICY.md                     # Policy engine documentation
-    └── ADAPTERS_MQTT_HTTP.md         # MQTT + HTTP adapter details
+    ├── ADAPTERS_MQTT_HTTP.md         # MQTT + HTTP adapter details
+    └── COAP.md                       # CoAP adapter details
 ```

@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"edgemesh/internal/adapter"
+	adaptcoap "edgemesh/internal/adapter/coap"
 	adapthttp "edgemesh/internal/adapter/http"
 	adaptmqtt "edgemesh/internal/adapter/mqtt"
 	"edgemesh/internal/bus"
@@ -23,6 +24,7 @@ type Config struct {
 	NATS     NATSConfig       `yaml:"nats"`
 	MQTT     adaptmqtt.Config `yaml:"mqtt"`
 	HTTP     adapthttp.Config `yaml:"http"`
+	CoAP     adaptcoap.Config `yaml:"coap"`
 	Registry RegistryConfig   `yaml:"registry"`
 	Policy   policy.Config    `yaml:"policy"`
 }
@@ -86,6 +88,7 @@ func Run(configPath string) error {
 	adapters := []adapter.Adapter{
 		adaptmqtt.New(cfg.MQTT),
 		adapthttp.New(cfg.HTTP),
+		adaptcoap.New(cfg.CoAP),
 	}
 
 	for _, a := range adapters {

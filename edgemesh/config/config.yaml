@@ -20,6 +20,10 @@ http:
   # Listen address for the HTTP adapter (ingest + consumer API).
   listen: ":8080"
 
+coap:
+  # Listen address for the CoAP adapter (UDP, RFC 7252). Standard port is 5683.
+  listen: ":5683"
+
 registry:
   # SQLite database file path. Created automatically on first run.
   db_path: "./edgemesh.db"
