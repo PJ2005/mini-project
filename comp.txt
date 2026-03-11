@@ -1,0 +1,460 @@
+// JSON of edgemesh at 1000 messages 100/s
+aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+           -messages 1000 \
+           -rate 100 \
+           -concurrency 4 \
+           -health http://127.0.0.1:8080/health
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    1000
+  Rate:        100 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 1000 messages in 10.15s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 1000,
+    "target_rate_per_sec": 100,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 1000,
+    "total_errors": 0,
+    "duration_seconds": 10.15,
+    "actual_rate_per_sec": 98.48
+  },
+  "latency": {
+    "min_ms": 0.067,
+    "max_ms": 2.778,
+    "mean_ms": 0.45532100000000003,
+    "p50_ms": 0.346,
+    "p95_ms": 1.075,
+    "p99_ms": 1.603
+  },
+  "health_after": {
+    "adapters": [
+      "mqtt",
+      "http",
+      "coap"
+    ],
+    "device_count": 7,
+    "memory": {
+      "gc_pause_ms": 0.38489,
+      "gc_runs": 1,
+      "heap_alloc_mb": 2.4676742553710938,
+      "heap_inuse_mb": 3.734375,
+      "stack_inuse_mb": 0.78125,
+      "sys_mb": 17.11157989501953
+    },
+    "nats_connected": true,
+    "runtime": {
+      "go_version": "go1.26.1",
+      "goroutines": 30
+    },
+    "storage": {
+      "db_size_mb": 0.02734375,
+      "dead_letters": 0,
+      "latest_messages": 7
+    },
+    "throughput": {
+      "mqtt_published": 1002,
+      "mqtt_received": 1002,
+      "total_published": 1002
+    },
+    "uptime_seconds": 733
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_230552_1000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 1000 sent, 0 errors
+  Duration        : 10.15 seconds
+  Throughput      : 98 msg/s
+  Latency (MQTT publish):
+    Min  : 0.067 ms
+    p50  : 0.346 ms
+    p95  : 1.075 ms
+    p99  : 1.603 ms
+    Max  : 2.778 ms
+  Memory:
+    Heap alloc : 2.47 MB
+    Sys total  : 17.11 MB
+    Goroutines : 30
+
+// JSON of Node-Red for 1000 messages at 100/s
+aqua@aquanexus:~/edgemesh/edgemesh $ # Node-RED test (same messages, same rate)
+./loadtest -broker tcp://127.0.0.1:1883 \
+           -messages 1000 \
+           -rate 100 \
+           -concurrency 4 \
+           -health http://127.0.0.1:1880/health
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    1000
+  Rate:        100 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 1000 messages in 10.15s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 1000,
+    "target_rate_per_sec": 100,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 1000,
+    "total_errors": 0,
+    "duration_seconds": 10.15,
+    "actual_rate_per_sec": 98.53
+  },
+  "latency": {
+    "min_ms": 0.106,
+    "max_ms": 1.682,
+    "mean_ms": 0.3485300000000001,
+    "p50_ms": 0.287,
+    "p95_ms": 0.762,
+    "p99_ms": 0.979
+  },
+  "health_after": {
+    "device_count": 5,
+    "messages_processed": 2001,
+    "runtime": "Node-RED",
+    "uptime_seconds": 368
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_230910_1000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 1000 sent, 0 errors
+  Duration        : 10.15 seconds
+  Throughput      : 99 msg/s
+  Latency (MQTT publish):
+    Min  : 0.106 ms
+    p50  : 0.287 ms
+    p95  : 0.762 ms
+    p99  : 0.979 ms
+    Max  : 1.682 ms
+
+-------------------------------------------------------------
+// Edgemesh 5000 messages at 500/s
+aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+           -messages 5000 \
+           -rate 500 \
+           -concurrency 4 \
+           -health http://127.0.0.1:8080/health
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    5000
+  Rate:        500 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 5000 messages in 10.74s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 5000,
+    "target_rate_per_sec": 500,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 5000,
+    "total_errors": 0,
+    "duration_seconds": 10.74,
+    "actual_rate_per_sec": 465.38
+  },
+  "latency": {
+    "min_ms": 0.042,
+    "max_ms": 3.637,
+    "mean_ms": 0.3337361999999987,
+    "p50_ms": 0.209,
+    "p95_ms": 0.985,
+    "p99_ms": 1.729
+  },
+  "health_after": {
+    "adapters": [
+      "mqtt",
+      "http",
+      "coap"
+    ],
+    "device_count": 7,
+    "memory": {
+      "gc_pause_ms": 0.103668,
+      "gc_runs": 10,
+      "heap_alloc_mb": 1.1036758422851562,
+      "heap_inuse_mb": 2.640625,
+      "stack_inuse_mb": 0.8125,
+      "sys_mb": 17.20532989501953
+    },
+    "nats_connected": true,
+    "runtime": {
+      "go_version": "go1.26.1",
+      "goroutines": 30
+    },
+    "storage": {
+      "db_size_mb": 0.02734375,
+      "dead_letters": 0,
+      "latest_messages": 7
+    },
+    "throughput": {
+      "mqtt_published": 6589,
+      "mqtt_received": 6589,
+      "total_published": 6589
+    },
+    "uptime_seconds": 1113
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_231212_5000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 5000 sent, 0 errors
+  Duration        : 10.74 seconds
+  Throughput      : 465 msg/s
+  Latency (MQTT publish):
+    Min  : 0.042 ms
+    p50  : 0.209 ms
+    p95  : 0.985 ms
+    p99  : 1.729 ms
+    Max  : 3.637 ms
+  Memory:
+    Heap alloc : 1.10 MB
+    Sys total  : 17.21 MB
+    Goroutines : 30
+
+// Node-Red 5000 messages at 500/s
+aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 500            -concurrency 4            -health http://127.0.0.1:1880/h
+ealth
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    5000
+  Rate:        500 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 5000 messages in 10.73s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 5000,
+    "target_rate_per_sec": 500,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 5000,
+    "total_errors": 0,
+    "duration_seconds": 10.73,
+    "actual_rate_per_sec": 465.78
+  },
+  "latency": {
+    "min_ms": 0.048,
+    "max_ms": 4.165,
+    "mean_ms": 0.3411142000000007,
+    "p50_ms": 0.217,
+    "p95_ms": 0.98,
+    "p99_ms": 1.804
+  },
+  "health_after": {
+    "device_count": 5,
+    "messages_processed": 12001,
+    "runtime": "Node-RED",
+    "uptime_seconds": 634
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_231336_5000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 5000 sent, 0 errors
+  Duration        : 10.73 seconds
+  Throughput      : 466 msg/s
+  Latency (MQTT publish):
+    Min  : 0.048 ms
+    p50  : 0.217 ms
+    p95  : 0.980 ms
+    p99  : 1.804 ms
+    Max  : 4.165 ms
+
+-------------------------------------------------------------
+// Edgemesh unlimited rate (check throughput ceiling)
+aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+           -messages 5000 \
+           -rate 0 \
+           -concurrency 4 \
+           -health http://127.0.0.1:8080/health
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    5000
+  Rate:        0 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 5000 messages in 0.20s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 5000,
+    "target_rate_per_sec": 0,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 5000,
+    "total_errors": 0,
+    "duration_seconds": 0.2,
+    "actual_rate_per_sec": 24497.18
+  },
+  "latency": {
+    "min_ms": 0.023,
+    "max_ms": 5.301,
+    "mean_ms": 0.15828360000000036,
+    "p50_ms": 0.068,
+    "p95_ms": 0.467,
+    "p99_ms": 2.037
+  },
+  "health_after": {
+    "adapters": [
+      "mqtt",
+      "http",
+      "coap"
+    ],
+    "device_count": 7,
+    "memory": {
+      "gc_pause_ms": 0.089538,
+      "gc_runs": 17,
+      "heap_alloc_mb": 2.95599365234375,
+      "heap_inuse_mb": 4.1953125,
+      "stack_inuse_mb": 0.78125,
+      "sys_mb": 17.20532989501953
+    },
+    "nats_connected": true,
+    "runtime": {
+      "go_version": "go1.26.1",
+      "goroutines": 30
+    },
+    "storage": {
+      "db_size_mb": 0.02734375,
+      "dead_letters": 0,
+      "latest_messages": 7
+    },
+    "throughput": {
+      "mqtt_published": 12245,
+      "mqtt_received": 12245,
+      "total_published": 12245
+    },
+    "uptime_seconds": 1269
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_231449_5000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 5000 sent, 0 errors
+  Duration        : 0.20 seconds
+  Throughput      : 24497 msg/s
+  Latency (MQTT publish):
+    Min  : 0.023 ms
+    p50  : 0.068 ms
+    p95  : 0.467 ms
+    p99  : 2.037 ms
+    Max  : 5.301 ms
+  Memory:
+    Heap alloc : 2.96 MB
+    Sys total  : 17.21 MB
+    Goroutines : 30
+
+-------------------------------------------------------------
+// Node-Red unlimited rate (check throughput ceiling)
+
+aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 0            -concurrency 4            -health http://127.0.0.1:1880/hea
+lth
+EdgeMesh Load Test
+  Broker:      tcp://127.0.0.1:1883
+  Messages:    5000
+  Rate:        0 msg/s
+  Concurrency: 4
+
+Connected 4 MQTT clients. Warming up 2s...
+
+Load test complete. 5000 messages in 0.19s
+Waiting 3s for pipeline to drain...
+
+── BENCHMARK RESULTS ──────────────────────
+{
+  "config": {
+    "total_messages": 5000,
+    "target_rate_per_sec": 0,
+    "concurrency": 4,
+    "broker": "tcp://127.0.0.1:1883"
+  },
+  "throughput": {
+    "total_sent": 5000,
+    "total_errors": 0,
+    "duration_seconds": 0.19,
+    "actual_rate_per_sec": 26339.34
+  },
+  "latency": {
+    "min_ms": 0.024,
+    "max_ms": 4.282,
+    "mean_ms": 0.14095180000000002,
+    "p50_ms": 0.07,
+    "p95_ms": 0.434,
+    "p99_ms": 1.067
+  },
+  "health_after": {
+    "device_count": 5,
+    "messages_processed": 16140,
+    "runtime": "Node-RED",
+    "uptime_seconds": 768
+  },
+  "errors": 0,
+  "dropped_messages": 0
+}
+
+Results saved to benchmark_20260311_231550_5000msg.json
+
+── SUMMARY ────────────────────────────────
+  Total messages  : 5000 sent, 0 errors
+  Duration        : 0.19 seconds
+  Throughput      : 26339 msg/s
+  Latency (MQTT publish):
+    Min  : 0.024 ms
+    p50  : 0.070 ms
+    p95  : 0.434 ms
+    p99  : 1.067 ms
+    Max  : 4.282 ms
