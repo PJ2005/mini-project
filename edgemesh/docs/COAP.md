@@ -15,6 +15,7 @@ CoAP Device                        EdgeMesh                         NATS
     │  {"metric":"humidity",         │                               │
     │   "value":62.1,"unit":"%"}     │                               │
     │ ──────────────────────────────►│                               │
+    │                                │ validate device_id (Fix 10)   │
     │                                │ parse path → device_id        │
     │                                │ JSON → TelemetryPayload       │
     │                                │   metric="humidity"           │
@@ -30,11 +31,17 @@ CoAP Device                        EdgeMesh                         NATS
     │ ◄──────────────────────────────│                               │
 ```
 
+## Device ID Validation (Fix 10)
+
+Before processing any request, the adapter validates the extracted device ID:
+- **Empty check** — if the device ID is empty or missing from the path, returns CoAP `4.00 Bad Request` with message `"device_id is empty or missing from path"`.
+- **Character validation** — device IDs must match `^[a-zA-Z0-9_-]+$` (alphanumerics, dashes, and underscores only). Invalid characters return `4.00 Bad Request` with a descriptive message including the offending characters.
+
 ## Endpoints
 
 ### POST /telemetry/{device_id}
 
-Ingests telemetry data. The `device_id` is extracted from the URI path.
+Ingests telemetry data. The `device_id` is extracted from the URI path and validated.
 
 **Request body (JSON):**
 ```json
@@ -65,8 +72,9 @@ coap:
 
 1. **UDP only.** CoAP over UDP is the standard transport for constrained devices. DTLS can be added via `coap.ListenAndServeDTLS` when encryption is needed.
 2. **JSON payloads.** Although CoAP typically uses CBOR, JSON is used here for consistency with the MQTT and HTTP adapters. A CBOR extension can be added by checking the Content-Format option.
-3. **Same path convention as HTTP.** `/telemetry/{device_id}` and `/event/{device_id}` mirror the HTTP ingest API, reducing cognitive load for developers working with multiple adapters.
-4. **go-coap/v3.** The `plgd-dev/go-coap/v3` library provides a mux-based router with the same `Handler`/`ResponseWriter` pattern as Go's `net/http`, keeping the code style consistent.
+3. **Same path convention as HTTP.** `/telemetry/{device_id}` and `/event/{device_id}` mirror the HTTP ingest API, reducing cognitive load.
+4. **go-coap/v3.** The `plgd-dev/go-coap/v3` library provides a mux-based router with the same `Handler`/`ResponseWriter` pattern as Go's `net/http`.
+5. **Strict device ID validation.** Only alphanumerics, dashes, and underscores are accepted, preventing path traversal and injection attacks.
 
 ## Testing with coap-client
 

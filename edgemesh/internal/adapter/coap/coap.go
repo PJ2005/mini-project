@@ -5,7 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -19,14 +20,12 @@ import (
 	"edgemesh/internal/registry"
 )
 
-// Config holds CoAP adapter settings from config.yaml.
 type Config struct {
 	Listen string `yaml:"listen"`
 }
 
-// Adapter implements the adapter.Adapter interface for CoAP over UDP.
-// It receives telemetry and event messages from constrained IoT devices
-// using the Constrained Application Protocol (RFC 7252).
+var validDeviceID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
 type Adapter struct {
 	cfg    Config
 	bus    bus.MessageBus
@@ -35,18 +34,12 @@ type Adapter struct {
 	cancel context.CancelFunc
 }
 
-// New creates a CoAP adapter with the given configuration.
 func New(cfg Config) *Adapter {
 	return &Adapter{cfg: cfg}
 }
 
 func (a *Adapter) Name() string { return "coap" }
 
-// Start begins listening for CoAP requests on the configured UDP address.
-// Two path prefixes are handled:
-//
-//	/telemetry/<device_id> — ingest telemetry data
-//	/event/<device_id>     — ingest event data
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
 	a.bus = b
 	a.reg = reg
@@ -59,33 +52,26 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		log.Printf("[coap] listening on %s (UDP)", a.cfg.Listen)
+		slog.Info("listening", "component", "coap", "listen", a.cfg.Listen, "transport", "UDP")
 		if err := coap.ListenAndServe("udp", a.cfg.Listen, router); err != nil {
-			// ListenAndServe returns error on shutdown — only log if unexpected.
-			log.Printf("[coap] serve exited: %v", err)
+			slog.Error("serve exited", "component", "coap", "error", err)
 		}
 	}()
 
 	return nil
 }
 
-// Stop gracefully shuts down the CoAP UDP server.
 func (a *Adapter) Stop(ctx context.Context) error {
 	if a.cancel != nil {
 		a.cancel()
 	}
-	log.Println("[coap] adapter stopped")
+	slog.Info("adapter stopped", "component", "coap")
 	return nil
 }
 
-// ── Telemetry Handler ───────────────────────────────────
-
-// handleTelemetry processes requests to /telemetry/<device_id>.
-// Expects a JSON body: {"metric": "temperature", "value": 23.5, "unit": "celsius"}
 func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
-	deviceID := extractDeviceID(req, "telemetry")
-	if deviceID == "" {
-		setResponse(w, codes.BadRequest, "missing device_id in path")
+	deviceID, ok := a.validateDeviceID(w, req, "telemetry")
+	if !ok {
 		return
 	}
 
@@ -125,17 +111,16 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 	})
 
 	setResponse(w, codes.Created, fmt.Sprintf(`{"message_id":"%s"}`, msg.GetMessageId()))
-	log.Printf("[coap] telemetry from %s: %s=%.2f", deviceID, payload.Metric, payload.Value)
+	slog.Info("telemetry received",
+		"component", "coap",
+		"device_id", deviceID,
+		"metric", payload.Metric,
+		"value", payload.Value)
 }
 
-// ── Event Handler ───────────────────────────────────────
-
-// handleEvent processes requests to /event/<device_id>.
-// Expects a JSON body: {"event_type": "alarm", "severity": "critical", "detail": "overheated"}
 func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
-	deviceID := extractDeviceID(req, "event")
-	if deviceID == "" {
-		setResponse(w, codes.BadRequest, "missing device_id in path")
+	deviceID, ok := a.validateDeviceID(w, req, "event")
+	if !ok {
 		return
 	}
 
@@ -175,22 +160,32 @@ func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
 	})
 
 	setResponse(w, codes.Created, fmt.Sprintf(`{"message_id":"%s"}`, msg.GetMessageId()))
-	log.Printf("[coap] event from %s: type=%s severity=%s", deviceID, payload.EventType, payload.Severity)
+	slog.Info("event received",
+		"component", "coap",
+		"device_id", deviceID,
+		"event_type", payload.EventType,
+		"severity", payload.Severity)
 }
 
-// ── Helpers ─────────────────────────────────────────────
+func (a *Adapter) validateDeviceID(w mux.ResponseWriter, req *mux.Message, prefix string) (string, bool) {
+	deviceID := extractDeviceID(req, prefix)
+	if deviceID == "" {
+		setResponse(w, codes.BadRequest, "device_id is empty or missing from path")
+		return "", false
+	}
+	if !validDeviceID.MatchString(deviceID) {
+		setResponse(w, codes.BadRequest,
+			fmt.Sprintf("device_id %q contains invalid characters; only alphanumerics, dashes, and underscores are allowed", deviceID))
+		return "", false
+	}
+	return deviceID, true
+}
 
-// extractDeviceID pulls the device ID from the CoAP URI path.
-// CoAP paths are split into URI-Path options by the library, so
-// the full path is reconstructed and parsed.
-// For a path "telemetry/sensor-99" with prefix "telemetry",
-// it returns "sensor-99".
 func extractDeviceID(req *mux.Message, prefix string) string {
 	path, err := req.Options().Path()
 	if err != nil {
 		return ""
 	}
-	// path looks like "telemetry/sensor-99"
 	parts := strings.SplitN(path, "/", 3)
 	if len(parts) < 2 || parts[0] != prefix {
 		return ""
@@ -198,7 +193,6 @@ func extractDeviceID(req *mux.Message, prefix string) string {
 	return parts[1]
 }
 
-// readBody reads the full request body from a CoAP message.
 func readBody(req *mux.Message) ([]byte, error) {
 	if req.Body() == nil {
 		return nil, fmt.Errorf("empty body")
@@ -210,10 +204,9 @@ func readBody(req *mux.Message) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// setResponse writes a CoAP response with a text payload.
 func setResponse(w mux.ResponseWriter, code codes.Code, body string) {
 	err := w.SetResponse(code, message.TextPlain, bytes.NewReader([]byte(body)))
 	if err != nil {
-		log.Printf("[coap] cannot set response: %v", err)
+		slog.Error("cannot set response", "component", "coap", "error", err)
 	}
 }

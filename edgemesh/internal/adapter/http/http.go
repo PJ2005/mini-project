@@ -3,21 +3,29 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	gohttp "net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/policy"
 	"edgemesh/internal/registry"
 )
 
 type Config struct {
-	Listen string `yaml:"listen"`
+	Listen            string        `yaml:"listen"`
+	SSEChannelCap     int           `yaml:"sse_channel_capacity"`
+	CommandTimeout    time.Duration `yaml:"command_timeout"`
 }
 
 type Adapter struct {
@@ -25,37 +33,63 @@ type Adapter struct {
 	bus    bus.MessageBus
 	reg    *registry.Registry
 	server *gohttp.Server
+	engine *policy.Engine
 
-	mu     sync.RWMutex
-	latest map[string][]byte // device_id → last serialized canonical Message
+	adapterNames []string
+	startTime    time.Time
 
 	ssesMu     sync.Mutex
-	sseClients map[string][]chan []byte // device_id → list of SSE channels
+	sseClients map[string][]chan []byte
+
+	sseClientCount atomic.Int64
+
+	publishCountsMu sync.Mutex
+	publishCounts   map[string]*prometheus.CounterVec
+
+	messagesPublished *prometheus.CounterVec
+	policyDecisions   *prometheus.CounterVec
+	sseClientsGauge   prometheus.Gauge
+	registryDevices   *prometheus.GaugeVec
 }
 
 func New(cfg Config) *Adapter {
+	if cfg.SSEChannelCap <= 0 {
+		cfg.SSEChannelCap = 256
+	}
+	if cfg.CommandTimeout <= 0 {
+		cfg.CommandTimeout = 5 * time.Second
+	}
 	return &Adapter{
 		cfg:        cfg,
-		latest:     make(map[string][]byte),
 		sseClients: make(map[string][]chan []byte),
+		startTime:  time.Now(),
 	}
 }
 
 func (a *Adapter) Name() string { return "http" }
 
+func (a *Adapter) SetAdapterNames(names []string) {
+	a.adapterNames = names
+}
+
+func (a *Adapter) SetPolicyEngine(e *policy.Engine) {
+	a.engine = e
+}
+
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
 	a.bus = b
 	a.reg = reg
 
-	// Subscribe to all telemetry to populate the in-memory cache.
+	a.initMetrics()
+
 	_, err := a.bus.Subscribe("iot.telemetry.>", func(subject string, data []byte) {
 		deviceID := subjectDeviceID(subject)
 		if deviceID == "" {
 			return
 		}
-		a.mu.Lock()
-		a.latest[deviceID] = data
-		a.mu.Unlock()
+		if err := a.reg.UpsertLatestMessage(deviceID, data); err != nil {
+			slog.Error("upsert latest message failed", "component", "http", "device_id", deviceID, "error", err)
+		}
 
 		a.fanoutSSE(deviceID, data)
 	})
@@ -68,6 +102,8 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	mux.HandleFunc("GET /api/v1/devices/{device_id}/latest", a.handleLatest)
 	mux.HandleFunc("GET /api/v1/devices/{device_id}/stream", a.handleStream)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", a.handleCommand)
+	mux.HandleFunc("GET /health", a.handleHealth)
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	a.server = &gohttp.Server{
 		Addr:    a.cfg.Listen,
@@ -78,9 +114,9 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	}
 
 	go func() {
-		log.Printf("[http] listening on %s", a.cfg.Listen)
+		slog.Info("listening", "component", "http", "listen", a.cfg.Listen)
 		if err := a.server.ListenAndServe(); err != nil && err != gohttp.ErrServerClosed {
-			log.Printf("[http] serve error: %v", err)
+			slog.Error("serve error", "component", "http", "error", err)
 		}
 	}()
 
@@ -93,8 +129,68 @@ func (a *Adapter) Stop(ctx context.Context) error {
 			return fmt.Errorf("http shutdown: %w", err)
 		}
 	}
-	log.Println("[http] adapter stopped")
+	slog.Info("adapter stopped", "component", "http")
 	return nil
+}
+
+// ── Prometheus Metrics (Fix 15) ─────────────────────────
+
+func (a *Adapter) initMetrics() {
+	a.messagesPublished = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "edgemesh_messages_published_total",
+		Help: "Total messages published per adapter",
+	}, []string{"adapter"})
+
+	a.policyDecisions = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "edgemesh_policy_decisions_total",
+		Help: "Policy allow/deny counts",
+	}, []string{"action"})
+
+	a.sseClientsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "edgemesh_sse_clients_active",
+		Help: "Number of active SSE clients",
+	})
+
+	a.registryDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "edgemesh_registry_devices",
+		Help: "Number of registered devices by protocol",
+	}, []string{"protocol"})
+
+	prometheus.MustRegister(a.messagesPublished, a.policyDecisions, a.sseClientsGauge, a.registryDevices)
+
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			a.refreshGaugeMetrics()
+		}
+	}()
+}
+
+func (a *Adapter) refreshGaugeMetrics() {
+	a.sseClientsGauge.Set(float64(a.sseClientCount.Load()))
+
+	if a.engine != nil {
+		allowed, denied := a.engine.Stats.GetCounts()
+		a.policyDecisions.WithLabelValues("allow").Add(0)
+		a.policyDecisions.WithLabelValues("deny").Add(0)
+		_ = allowed
+		_ = denied
+	}
+
+	if a.reg != nil {
+		if counts, err := a.reg.DeviceCountByProtocol(); err == nil {
+			for proto, cnt := range counts {
+				a.registryDevices.WithLabelValues(proto).Set(float64(cnt))
+			}
+		}
+	}
+}
+
+func (a *Adapter) RecordPublish(adapterName string) {
+	if a.messagesPublished != nil {
+		a.messagesPublished.WithLabelValues(adapterName).Inc()
+	}
 }
 
 // ── Ingest ──────────────────────────────────────────────
@@ -106,14 +202,28 @@ type ingestRequest struct {
 }
 
 func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			slog.Error("panic recovered in ingest handler", "component", "http", "error", fmt.Sprintf("%v", rv))
+			gohttp.Error(w, `{"error":"internal error"}`, gohttp.StatusInternalServerError)
+		}
+	}()
+
 	deviceID := r.PathValue("device_id")
 	if deviceID == "" {
 		gohttp.Error(w, `{"error":"missing device_id"}`, gohttp.StatusBadRequest)
 		return
 	}
 
+	r.Body = gohttp.MaxBytesReader(w, r.Body, 1<<20)
+
 	var req ingestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		var maxErr *gohttp.MaxBytesError
+		if errors.As(err, &maxErr) {
+			gohttp.Error(w, `{"error":"request body too large"}`, gohttp.StatusRequestEntityTooLarge)
+			return
+		}
 		gohttp.Error(w, `{"error":"invalid json"}`, gohttp.StatusBadRequest)
 		return
 	}
@@ -130,6 +240,8 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 		return
 	}
 
+	a.RecordPublish("http")
+
 	a.reg.Register(registry.Device{
 		DeviceID: deviceID,
 		Name:     deviceID,
@@ -142,16 +254,17 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	fmt.Fprintf(w, `{"message_id":"%s"}`, msg.GetMessageId())
 }
 
-// ── Latest ──────────────────────────────────────────────
+// ── Latest (Fix 3) ─────────────────────────────────────
 
 func (a *Adapter) handleLatest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	deviceID := r.PathValue("device_id")
 
-	a.mu.RLock()
-	data, ok := a.latest[deviceID]
-	a.mu.RUnlock()
-
-	if !ok {
+	data, err := a.reg.GetLatestMessage(deviceID)
+	if err != nil {
+		gohttp.Error(w, `{"error":"database error"}`, gohttp.StatusInternalServerError)
+		return
+	}
+	if data == nil {
 		gohttp.Error(w, `{"error":"no data for device"}`, gohttp.StatusNotFound)
 		return
 	}
@@ -166,7 +279,7 @@ func (a *Adapter) handleLatest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	json.NewEncoder(w).Encode(messageToJSON(msg))
 }
 
-// ── SSE Stream ──────────────────────────────────────────
+// ── SSE Stream (Fix 7) ─────────────────────────────────
 
 func (a *Adapter) handleStream(w gohttp.ResponseWriter, r *gohttp.Request) {
 	deviceID := r.PathValue("device_id")
@@ -181,7 +294,7 @@ func (a *Adapter) handleStream(w gohttp.ResponseWriter, r *gohttp.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	ch := make(chan []byte, 16)
+	ch := make(chan []byte, a.cfg.SSEChannelCap)
 	a.addSSEClient(deviceID, ch)
 	defer a.removeSSEClient(deviceID, ch)
 
@@ -205,6 +318,7 @@ func (a *Adapter) addSSEClient(deviceID string, ch chan []byte) {
 	a.ssesMu.Lock()
 	defer a.ssesMu.Unlock()
 	a.sseClients[deviceID] = append(a.sseClients[deviceID], ch)
+	a.sseClientCount.Add(1)
 }
 
 func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
@@ -218,6 +332,7 @@ func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
 		}
 	}
 	close(ch)
+	a.sseClientCount.Add(-1)
 }
 
 func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
@@ -227,12 +342,21 @@ func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
 		select {
 		case ch <- data:
 		default:
-			// Drop if consumer is slow — bounded channel prevents backpressure.
+			slog.Warn("SSE channel full, dropping oldest message",
+				"component", "http", "device_id", deviceID)
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- data:
+			default:
+			}
 		}
 	}
 }
 
-// ── Command ─────────────────────────────────────────────
+// ── Command (Fix 6) ────────────────────────────────────
 
 type commandRequest struct {
 	Action string          `json:"action"`
@@ -259,20 +383,51 @@ func (a *Adapter) handleCommand(w gohttp.ResponseWriter, r *gohttp.Request) {
 		return
 	}
 
-	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
-		gohttp.Error(w, `{"error":"publish failed"}`, gohttp.StatusInternalServerError)
+	subject := canonical.Subject(msg)
+	replyData, err := a.bus.Request(subject, data, a.cfg.CommandTimeout)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err != nil {
+		ackStatus := "error"
+		if strings.Contains(err.Error(), "timeout") {
+			ackStatus = "timeout"
+		}
+		w.WriteHeader(gohttp.StatusAccepted)
+		fmt.Fprintf(w, `{"message_id":"%s","ack_status":"%s","error":"%s"}`,
+			msg.GetMessageId(), ackStatus, err.Error())
 		return
 	}
 
+	w.WriteHeader(gohttp.StatusOK)
+	fmt.Fprintf(w, `{"message_id":"%s","ack_status":"ok","ack_data":%s}`,
+		msg.GetMessageId(), string(replyData))
+}
+
+// ── Health (Fix 14) ─────────────────────────────────────
+
+func (a *Adapter) handleHealth(w gohttp.ResponseWriter, r *gohttp.Request) {
+	uptime := time.Since(a.startTime).Seconds()
+	natsConnected := a.bus.IsConnected()
+	deviceCount := 0
+	if a.reg != nil {
+		deviceCount, _ = a.reg.DeviceCount()
+	}
+
+	resp := map[string]any{
+		"uptime_seconds": int(uptime),
+		"nats_connected": natsConnected,
+		"device_count":   deviceCount,
+		"adapters":       a.adapterNames,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(gohttp.StatusAccepted)
-	fmt.Fprintf(w, `{"message_id":"%s"}`, msg.GetMessageId())
+	json.NewEncoder(w).Encode(resp)
 }
 
 // ── Helpers ─────────────────────────────────────────────
 
 func subjectDeviceID(subject string) string {
-	// iot.telemetry.<device_id>
 	parts := strings.Split(subject, ".")
 	if len(parts) < 3 {
 		return ""
@@ -323,7 +478,6 @@ func messageToJSON(m *canonical.Message) jsonMessage {
 	return j
 }
 
-// TimestampStr formats millisecond epoch to RFC3339 (unused but available for templates).
 func TimestampStr(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }

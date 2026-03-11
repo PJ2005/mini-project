@@ -4,10 +4,19 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 )
+
+// bufPool reduces GC pressure by reusing byte slices for proto.Marshal.
+var bufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 0, 256)
+		return &b
+	},
+}
 
 func generateID() string {
 	b := make([]byte, 16)
@@ -66,8 +75,27 @@ func NewCommandMessage(deviceID, sourceProto, action string, params []byte) *Mes
 	}
 }
 
+// Marshal serializes a canonical Message to Protobuf wire format.
+// Internally uses a sync.Pool to reduce per-message allocation overhead.
 func Marshal(m *Message) ([]byte, error) {
-	return proto.Marshal(m)
+	bp := bufPool.Get().(*[]byte)
+	buf := (*bp)[:0]
+
+	opts := proto.MarshalOptions{}
+	var err error
+	buf, err = opts.MarshalAppend(buf, m)
+	if err != nil {
+		*bp = buf
+		bufPool.Put(bp)
+		return nil, err
+	}
+
+	// Return a copy so the caller owns the bytes; recycle the pooled slice.
+	out := make([]byte, len(buf))
+	copy(out, buf)
+	*bp = buf
+	bufPool.Put(bp)
+	return out, nil
 }
 
 func UnmarshalMessage(data []byte) (*Message, error) {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Device struct {
@@ -16,6 +16,7 @@ type Device struct {
 	Status    string            `json:"status"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	CreatedAt time.Time         `json:"created_at"`
+	LastSeen  time.Time         `json:"last_seen"`
 }
 
 type Registry struct {
@@ -23,7 +24,7 @@ type Registry struct {
 }
 
 func New(dbPath string) (*Registry, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open registry db: %w", err)
 	}
@@ -38,18 +39,33 @@ func New(dbPath string) (*Registry, error) {
 }
 
 func (r *Registry) migrate() error {
-	_, err := r.db.Exec(`
-		CREATE TABLE IF NOT EXISTS devices (
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS devices (
 			device_id  TEXT PRIMARY KEY,
 			name       TEXT NOT NULL,
 			protocol   TEXT NOT NULL,
 			status     TEXT NOT NULL DEFAULT 'active',
 			metadata   TEXT NOT NULL DEFAULT '{}',
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_seen  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS latest_messages (
+			device_id  TEXT PRIMARY KEY,
+			data       BLOB NOT NULL,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS dead_letters (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			subject    TEXT NOT NULL,
+			data       BLOB NOT NULL,
+			error      TEXT NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("migrate devices table: %w", err)
+		)`,
+	}
+	for _, s := range stmts {
+		if _, err := r.db.Exec(s); err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
 	}
 	return nil
 }
@@ -60,13 +76,14 @@ func (r *Registry) Register(d Device) error {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
 	_, err = r.db.Exec(
-		`INSERT INTO devices (device_id, name, protocol, status, metadata)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO devices (device_id, name, protocol, status, metadata, last_seen)
+		 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 		 ON CONFLICT(device_id) DO UPDATE SET
 		   name = excluded.name,
 		   protocol = excluded.protocol,
 		   status = excluded.status,
-		   metadata = excluded.metadata`,
+		   metadata = excluded.metadata,
+		   last_seen = CURRENT_TIMESTAMP`,
 		d.DeviceID, d.Name, d.Protocol, d.Status, string(meta),
 	)
 	if err != nil {
@@ -77,7 +94,7 @@ func (r *Registry) Register(d Device) error {
 
 func (r *Registry) GetByID(deviceID string) (*Device, error) {
 	row := r.db.QueryRow(
-		`SELECT device_id, name, protocol, status, metadata, created_at FROM devices WHERE device_id = ?`,
+		`SELECT device_id, name, protocol, status, metadata, created_at, last_seen FROM devices WHERE device_id = ?`,
 		deviceID,
 	)
 	return scanDevice(row)
@@ -85,7 +102,7 @@ func (r *Registry) GetByID(deviceID string) (*Device, error) {
 
 func (r *Registry) GetByProtocol(protocol string) ([]Device, error) {
 	rows, err := r.db.Query(
-		`SELECT device_id, name, protocol, status, metadata, created_at FROM devices WHERE protocol = ?`,
+		`SELECT device_id, name, protocol, status, metadata, created_at, last_seen FROM devices WHERE protocol = ?`,
 		protocol,
 	)
 	if err != nil {
@@ -116,6 +133,92 @@ func (r *Registry) UpdateStatus(deviceID, status string) error {
 	return nil
 }
 
+// UpdateLastSeen bumps the last_seen timestamp for a device.
+func (r *Registry) UpdateLastSeen(deviceID string) error {
+	_, err := r.db.Exec(`UPDATE devices SET last_seen = CURRENT_TIMESTAMP WHERE device_id = ?`, deviceID)
+	return err
+}
+
+// MarkInactiveDevices sets status='inactive' for devices that have not been
+// seen within the given timeout duration.
+func (r *Registry) MarkInactiveDevices(timeout time.Duration) (int64, error) {
+	cutoff := time.Now().Add(-timeout).UTC().Format("2006-01-02 15:04:05")
+	res, err := r.db.Exec(
+		`UPDATE devices SET status = 'inactive' WHERE status = 'active' AND last_seen < ?`,
+		cutoff,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("mark inactive devices: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// DeviceCount returns the total number of registered devices.
+func (r *Registry) DeviceCount() (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM devices`).Scan(&count)
+	return count, err
+}
+
+// DeviceCountByProtocol returns device counts grouped by protocol.
+func (r *Registry) DeviceCountByProtocol() (map[string]int, error) {
+	rows, err := r.db.Query(`SELECT protocol, COUNT(*) FROM devices GROUP BY protocol`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var proto string
+		var cnt int
+		if err := rows.Scan(&proto, &cnt); err != nil {
+			return nil, err
+		}
+		counts[proto] = cnt
+	}
+	return counts, rows.Err()
+}
+
+// ── Latest Messages (Fix 3) ────────────────────────────
+
+// UpsertLatestMessage stores the latest serialized message for a device.
+func (r *Registry) UpsertLatestMessage(deviceID string, data []byte) error {
+	_, err := r.db.Exec(
+		`INSERT INTO latest_messages (device_id, data, updated_at)
+		 VALUES (?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(device_id) DO UPDATE SET
+		   data = excluded.data,
+		   updated_at = CURRENT_TIMESTAMP`,
+		deviceID, data,
+	)
+	return err
+}
+
+// GetLatestMessage retrieves the latest serialized message for a device.
+func (r *Registry) GetLatestMessage(deviceID string) ([]byte, error) {
+	var data []byte
+	err := r.db.QueryRow(
+		`SELECT data FROM latest_messages WHERE device_id = ?`,
+		deviceID,
+	).Scan(&data)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return data, err
+}
+
+// ── Dead Letters (Fix 12) ──────────────────────────────
+
+// InsertDeadLetter records a message that could not be published after retries.
+func (r *Registry) InsertDeadLetter(subject string, data []byte, errMsg string) error {
+	_, err := r.db.Exec(
+		`INSERT INTO dead_letters (subject, data, error) VALUES (?, ?, ?)`,
+		subject, data, errMsg,
+	)
+	return err
+}
+
 func (r *Registry) Close() error {
 	return r.db.Close()
 }
@@ -127,7 +230,7 @@ type scanner interface {
 func scanDevice(s scanner) (*Device, error) {
 	var d Device
 	var meta string
-	if err := s.Scan(&d.DeviceID, &d.Name, &d.Protocol, &d.Status, &meta, &d.CreatedAt); err != nil {
+	if err := s.Scan(&d.DeviceID, &d.Name, &d.Protocol, &d.Status, &meta, &d.CreatedAt, &d.LastSeen); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -142,7 +245,7 @@ func scanDevice(s scanner) (*Device, error) {
 func scanDeviceRow(rows *sql.Rows) (*Device, error) {
 	var d Device
 	var meta string
-	if err := rows.Scan(&d.DeviceID, &d.Name, &d.Protocol, &d.Status, &meta, &d.CreatedAt); err != nil {
+	if err := rows.Scan(&d.DeviceID, &d.Name, &d.Protocol, &d.Status, &meta, &d.CreatedAt, &d.LastSeen); err != nil {
 		return nil, fmt.Errorf("scan device row: %w", err)
 	}
 	if err := json.Unmarshal([]byte(meta), &d.Metadata); err != nil {

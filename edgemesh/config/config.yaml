@@ -3,6 +3,9 @@
 nats:
   # NATS server URL. Use nats:// for plain, tls:// for encrypted connections.
   url: "nats://127.0.0.1:4222"
+  # Enable JetStream for durable subscriptions and message replay (Fix 11).
+  # Default: false (uses standard NATS).
+  jetstream: false
 
 mqtt:
   # MQTT broker address including port.
@@ -19,6 +22,10 @@ mqtt:
 http:
   # Listen address for the HTTP adapter (ingest + consumer API).
   listen: ":8080"
+  # SSE channel buffer capacity per client (Fix 7). Default: 256.
+  sse_channel_capacity: 256
+  # Timeout for command acknowledgment request/reply (Fix 6). Default: 5s.
+  command_timeout: "5s"
 
 coap:
   # Listen address for the CoAP adapter (UDP, RFC 7252). Standard port is 5683.
@@ -27,6 +34,10 @@ coap:
 registry:
   # SQLite database file path. Created automatically on first run.
   db_path: "./edgemesh.db"
+
+# Heartbeat timeout (Fix 1). Devices not seen within this duration are marked
+# inactive. Default: 5m. Checked every 60 seconds.
+heartbeat_timeout: "5m"
 
 policy:
   # Default action when no rule matches: "allow" or "deny".
@@ -45,4 +56,11 @@ policy:
       source_proto: "*"
       message_type: "event"
       action: "allow"
-
+    # Example: device-to-device command routing (Fix 4).
+    # When sensor-01 sends telemetry, trigger a command to actuator-01.
+    # - device_pattern: "sensor-01"
+    #   source_proto: "*"
+    #   message_type: "telemetry"
+    #   action: "allow"
+    #   command_target: "actuator-01"
+    #   command_action: "adjust"

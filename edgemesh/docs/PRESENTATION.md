@@ -1,9 +1,9 @@
 # Slide 1 — EdgeMesh: Lightweight IoT Interoperability Middleware
 
 - Bridges IoT protocols through a canonical Protobuf model
-- Runs at the edge — no cloud dependency required
-- NATS message bus decouples all protocol adapters
-- Sub-1000 LOC Go codebase, single binary
+- Runs at the edge — no cloud dependency, no CGo required
+- NATS message bus (with optional JetStream) decouples all protocol adapters
+- Pure-Go codebase, single binary, structured JSON logging
 
 NOTE: EdgeMesh exists because most IoT middleware (EdgeX, AWS Greengrass) assumes enterprise scale. EdgeMesh is for teams that need protocol translation in under an hour with zero infrastructure overhead.
 
@@ -26,8 +26,9 @@ NOTE: A factory floor might have Modbus PLCs, MQTT sensors, and HTTP cameras —
 - Single canonical Protobuf message for all device data
 - Protocol adapters translate native formats at the boundary
 - NATS bus routes messages — adapters never call each other
-- SQLite registry tracks devices with zero external dependencies
-- Policy engine filters messages before forwarding
+- SQLite registry with heartbeat, persistent cache, and dead-letters
+- Policy engine with hot-reload and device-to-device command routing
+- `/health` and `/metrics` endpoints for operational visibility
 
 NOTE: The key insight is that protocol translation is a solved problem per-protocol. The unsolved problem is the internal contract. EdgeMesh solves that with one Protobuf schema and a three-segment NATS subject: iot.<type>.<device_id>.
 
@@ -35,14 +36,14 @@ NOTE: The key insight is that protocol translation is a solved problem per-proto
 
 # Slide 4 — Architecture Overview
 
-- **Adapter Layer** — protocol-specific ingestion (MQTT, HTTP)
+- **Adapter Layer** — protocol-specific ingestion (MQTT, HTTP, CoAP)
 - **Canonical Model** — Protobuf Message with typed payloads
-- **NATS Bus** — publish/subscribe backbone, subject-based routing
-- **Policy Engine** — rule-based allow/deny before forwarding
-- **Device Registry** — SQLite store for known devices
-- **Gateway** — wires all layers, handles lifecycle and signals
+- **NATS Bus** — publish/subscribe backbone with optional JetStream persistence
+- **Policy Engine** — rule-based allow/deny + hot-reload + command routing
+- **Device Registry** — SQLite store with heartbeat, latest-message cache, dead-letters
+- **Gateway** — wires all layers, config validation, heartbeat goroutine, graceful shutdown
 
-NOTE: These six layers are fixed. Adding a new protocol only touches the Adapter Layer — everything below it stays untouched. This is the core architectural guarantee.
+NOTE: These six layers are fixed. Adding a new protocol only touches the Adapter Layer — everything below it stays untouched.
 
 ---
 
@@ -61,12 +62,13 @@ NOTE: We chose oneof over google.protobuf.Any for compile-time safety. Every con
 # Slide 6 — MQTT → HTTP Data Flow
 
 - MQTT device publishes JSON to `devices/sensor-42`
-- MQTT adapter extracts device_id from topic segment index
-- Flat JSON `{"temperature": 23.5}` → `TelemetryPayload`
+- MQTT adapter validates topic structure, extracts device_id
+- Flat or nested JSON → `TelemetryPayload`
 - Adapter publishes to NATS subject `iot.telemetry.sensor-42`
 - HTTP consumer API serves it via `GET /api/v1/devices/sensor-42/latest`
+- Latest message persisted in SQLite — survives restarts
 
-NOTE: Walk through this live: run mosquitto_pub in one terminal, curl the HTTP latest endpoint in another. The audience sees a message cross protocol boundaries in real time with zero glue code.
+NOTE: Walk through this live: run mosquitto_pub in one terminal, curl the HTTP latest endpoint in another. Nested JSON like `{"readings":{"temperature":23.5}}` also works.
 
 ---
 
@@ -74,23 +76,25 @@ NOTE: Walk through this live: run mosquitto_pub in one terminal, curl the HTTP l
 
 - Three methods: `Name()`, `Start(ctx, bus, registry)`, `Stop(ctx)`
 - Adapters receive shared bus and registry — no self-wiring
-- `ConverterFunc` type handles protocol-specific byte transformation
-- Adding CoAP requires one file: `internal/adapter/coap/coap.go`
+- Structured logging via `log/slog` with `"component"` field
+- Adding Modbus requires one file: `internal/adapter/modbus/modbus.go`
 - Gateway starts all adapters uniformly — no adapter-specific logic
 
-NOTE: The ADAPTER.md doc walks through creating a CoAP adapter step-by-step. Emphasize that the interface is intentionally small — three methods is all you implement. The gateway does the rest.
+NOTE: The ADAPTER.md doc walks through creating a new adapter step-by-step. Emphasize that the interface is intentionally small — three methods is all you implement.
 
 ---
 
-# Slide 8 — Developer Experience
+# Slide 8 — Reliability & Operations
 
-- `go build ./cmd/gateway && ./edgemesh-gateway` — single binary
-- Config is one YAML file with inline documentation
-- HTTP API supports ingest, latest, SSE streaming, and commands
-- Test with `curl` and `mosquitto_pub` — no SDK required
-- `go vet ./...` passes clean — no warnings, no hacks
+- **Heartbeat timeout** — devices not seen in 5m automatically marked inactive
+- **Publish retry** — 3 retries with exponential backoff, then dead-letter table
+- **NATS reconnection** — auto-reconnect with structured logging
+- **JetStream** — optional durable subscriptions for offline message replay
+- **Config validation** — all required fields validated at startup
+- **`/health`** — uptime, NATS status, device count, adapter names
+- **`/metrics`** — Prometheus-compatible metrics endpoint
 
-NOTE: Demo sequence: start NATS and Mosquitto, run the binary, then show the four curl commands from ADAPTERS_MQTT_HTTP.md. The SSE stream endpoint is the crowd-pleaser — open it in one terminal and publish MQTT in another.
+NOTE: These operational features make EdgeMesh production-ready. The health and metrics endpoints integrate with standard monitoring stacks.
 
 ---
 
@@ -102,16 +106,18 @@ NOTE: Demo sequence: start NATS and Mosquitto, run the binary, then show the fou
 - Target: small teams needing protocol bridge in hours, not weeks
 - Runs on Raspberry Pi, edge gateways, and constrained VMs
 
-NOTE: The strategic gap is between "write your own MQTT-to-HTTP script" and "deploy EdgeX Foundry." EdgeMesh fills that gap. It's for the team that needs interoperability today without hiring a platform team.
+NOTE: The strategic gap is between "write your own MQTT-to-HTTP script" and "deploy EdgeX Foundry." EdgeMesh fills that gap.
 
 ---
 
-# Slide 10 — Roadmap + Vision
+# Slide 10 — Implemented Features + Vision
 
-- Phase 1–4 complete: canonical model, bus, adapters, policy, gateway
-- Next: CoAP and Modbus adapters, JetStream persistence
-- Planned: WebSocket consumer adapter, Prometheus metrics export
+- ✅ Canonical model, bus, adapters (MQTT/HTTP/CoAP), policy, gateway
+- ✅ JetStream persistence, heartbeat timeout, publish retry
+- ✅ Hot-reload policy, command routing, structured logging
+- ✅ Health endpoint, Prometheus metrics, config validation
+- Next: Modbus adapter, WebSocket consumer, CoAP DTLS, TLS/mTLS
 - Open-core potential: commercial policy UI, fleet registry, audit log
 - Future state: **any protocol in, any protocol out, one edge binary**
 
-NOTE: The open-core angle is real — the policy engine and registry are natural extension points for a commercial layer. The core stays MIT-licensed and minimal. Emphasize that the architecture was designed for this split from day one.
+NOTE: The open-core angle is real — the policy engine and registry are natural extension points for a commercial layer. The core stays MIT-licensed and minimal.

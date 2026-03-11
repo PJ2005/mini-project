@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
 
@@ -48,28 +49,35 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 		SetClientID(a.cfg.ClientID).
 		SetAutoReconnect(true).
 		SetOnConnectHandler(func(c pahomqtt.Client) {
-			log.Printf("[mqtt] connected to %s, subscribing to %s", a.cfg.Broker, a.cfg.Topic)
+			slog.Info("connected, subscribing",
+				"component", "mqtt",
+				"broker", a.cfg.Broker,
+				"topic", a.cfg.Topic)
 			c.Subscribe(a.cfg.Topic, a.cfg.QoS, a.onMessage)
 		}).
 		SetConnectionLostHandler(func(_ pahomqtt.Client, err error) {
-			log.Printf("[mqtt] connection lost: %v", err)
+			slog.Warn("connection lost", "component", "mqtt", "error", err)
 		})
 
 	a.client = pahomqtt.NewClient(opts)
 	token := a.client.Connect()
-	token.Wait()
+	if !token.WaitTimeout(5 * time.Second) {
+		return fmt.Errorf("mqtt connect %s: timed out after 5s", a.cfg.Broker)
+	}
 	if err := token.Error(); err != nil {
 		return fmt.Errorf("mqtt connect %s: %w", a.cfg.Broker, err)
 	}
 
-	// Monitor context cancellation for clean shutdown.
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
 		<-ctx.Done()
 	}()
 
-	log.Printf("[mqtt] adapter started (broker=%s topic=%s)", a.cfg.Broker, a.cfg.Topic)
+	slog.Info("adapter started",
+		"component", "mqtt",
+		"broker", a.cfg.Broker,
+		"topic", a.cfg.Topic)
 	return nil
 }
 
@@ -81,31 +89,36 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		a.client.Disconnect(250)
 	}
 	a.wg.Wait()
-	log.Println("[mqtt] adapter stopped")
+	slog.Info("adapter stopped", "component", "mqtt")
 	return nil
 }
 
 func (a *Adapter) onMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in message handler", "component", "mqtt", "error", fmt.Sprintf("%v", r))
+		}
+	}()
+
 	deviceID := a.extractDeviceID(msg.Topic())
 	if deviceID == "" {
-		log.Printf("[mqtt] cannot extract device_id from topic %s", msg.Topic())
 		return
 	}
 
 	m, err := a.convertPayload(deviceID, msg.Payload())
 	if err != nil {
-		log.Printf("[mqtt] convert error for %s: %v", deviceID, err)
+		slog.Warn("convert error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
 
 	data, err := canonical.Marshal(m)
 	if err != nil {
-		log.Printf("[mqtt] marshal error for %s: %v", deviceID, err)
+		slog.Error("marshal error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
 
 	if err := a.bus.Publish(canonical.Subject(m), data); err != nil {
-		log.Printf("[mqtt] publish error for %s: %v", deviceID, err)
+		slog.Error("publish error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
 
@@ -121,27 +134,50 @@ func (a *Adapter) extractDeviceID(topic string) string {
 	parts := strings.Split(topic, "/")
 	idx := a.cfg.DeviceIDTopicIndex
 	if idx < 0 || idx >= len(parts) {
+		slog.Error("topic has fewer segments than device_id_topic_index",
+			"component", "mqtt",
+			"topic", topic,
+			"segments", len(parts),
+			"device_id_topic_index", idx)
 		return ""
 	}
-	return parts[idx]
+	id := parts[idx]
+	if id == "" {
+		slog.Error("empty device_id at topic index",
+			"component", "mqtt",
+			"topic", topic,
+			"device_id_topic_index", idx)
+		return ""
+	}
+	return id
 }
 
-// convertPayload turns a flat JSON object {"key": number} into the first
-// key-value pair as a TelemetryPayload. Nested objects are ignored.
 func (a *Adapter) convertPayload(deviceID string, raw []byte) (*canonical.Message, error) {
-	var flat map[string]any
-	if err := json.Unmarshal(raw, &flat); err != nil {
-		return nil, fmt.Errorf("json decode: %w", err)
+	var top map[string]any
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil, fmt.Errorf("payload is not valid JSON: %w (raw=%q)", err, string(raw))
 	}
 
-	for key, val := range flat {
-		num, ok := toFloat64(val)
+	for key, val := range top {
+		if num, ok := toFloat64(val); ok {
+			return canonical.NewTelemetryMessage(deviceID, "mqtt", key, num, ""), nil
+		}
+	}
+
+	for outerKey, val := range top {
+		nested, ok := val.(map[string]any)
 		if !ok {
 			continue
 		}
-		return canonical.NewTelemetryMessage(deviceID, "mqtt", key, num, ""), nil
+		for innerKey, innerVal := range nested {
+			if num, ok := toFloat64(innerVal); ok {
+				metric := outerKey + "." + innerKey
+				return canonical.NewTelemetryMessage(deviceID, "mqtt", metric, num, ""), nil
+			}
+		}
 	}
-	return nil, fmt.Errorf("no numeric key-value pair in payload")
+
+	return nil, fmt.Errorf("no numeric value found in payload (tried top-level and one level nested)")
 }
 
 func toFloat64(v any) (float64, bool) {

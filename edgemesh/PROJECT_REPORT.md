@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Project Title** | EdgeMesh: A Lightweight IoT Interoperability Middleware |
-| **Technology Stack** | Go 1.24, Protocol Buffers (proto3), NATS, MQTT (Eclipse Paho), CoAP (go-coap), SQLite, HTTP/SSE |
+| **Technology Stack** | Go 1.24, Protocol Buffers (proto3), NATS (+ JetStream), MQTT (Eclipse Paho), CoAP (go-coap), SQLite (pure-Go), Prometheus, HTTP/SSE, `log/slog` |
 | **Date** | March 2026 |
 
 ---
@@ -36,9 +36,9 @@
 
 The Internet of Things ecosystem is fragmented across dozens of protocols — MQTT, HTTP, CoAP, Modbus, and others — each with its own data formats, transport mechanisms, and client libraries. Existing interoperability platforms such as EdgeX Foundry and AWS Greengrass address this fragmentation, but at the cost of significant operational complexity: multi-container deployments, extensive configuration surfaces, and cloud dependencies that are unsuitable for constrained edge environments.
 
-**EdgeMesh** is a lightweight IoT interoperability middleware designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing are paramount. It bridges protocol-specific IoT devices through a **canonical Protocol Buffer message model** routed over a **NATS publish/subscribe message bus**. The system features a pluggable adapter architecture with built-in MQTT, HTTP, and CoAP adapters, an SQLite-backed device registry with auto-registration, a configurable rule-based policy engine, and a unified HTTP consumer API with real-time Server-Sent Events (SSE) streaming.
+**EdgeMesh** is a lightweight IoT interoperability middleware designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing are paramount. It bridges protocol-specific IoT devices through a **canonical Protocol Buffer message model** routed over a **NATS publish/subscribe message bus** (with optional JetStream persistence). The system features a pluggable adapter architecture with built-in MQTT, HTTP, and CoAP adapters, an SQLite-backed device registry with auto-registration and heartbeat timeout, a configurable rule-based policy engine with hot-reload and device-to-device command routing, persistent latest-message cache, publish retry with dead-letter storage, Prometheus metrics, health endpoint, config validation at startup, and a unified HTTP consumer API with real-time Server-Sent Events (SSE) streaming.
 
-The entire system compiles to a single binary under 1,100 lines of handwritten Go code, requires no Docker or Kubernetes infrastructure, and can be deployed on a Raspberry Pi or constrained edge gateway. This report presents the design rationale, architecture, implementation, and results of the EdgeMesh middleware.
+The entire system compiles to a single **pure-Go binary** (no CGo required), requires no Docker or Kubernetes infrastructure, and can be deployed on a Raspberry Pi or constrained edge gateway. All logging uses Go's `log/slog` with structured JSON output. This report presents the design rationale, architecture, implementation, and results of the EdgeMesh middleware.
 
 ---
 
@@ -199,8 +199,8 @@ CoAP Device → POST /telemetry/<device_id> (UDP) → JSON-to-Protobuf → NATS 
 
 **Outbound (HTTP Consumer API):**
 ```
-NATS Subscribe (iot.telemetry.>) → In-Memory Cache Update → GET /api/v1/devices/<device_id>/latest
-                                                          → SSE /api/v1/devices/<device_id>/stream
+NATS Subscribe (iot.telemetry.>) → SQLite Persistent Cache → GET /api/v1/devices/<device_id>/latest
+                                                            → SSE /api/v1/devices/<device_id>/stream
 ```
 
 **Policy Enforcement:**
@@ -304,13 +304,21 @@ type ConverterFunc func(raw []byte) ([]byte, error)
 type MessageBus interface {
     Publish(subject string, data []byte) error
     Subscribe(subject string, handler Handler) (Subscription, error)
+    Request(subject string, data []byte, timeout time.Duration) ([]byte, error)
+    IsConnected() bool
     Close()
 }
 ```
 
-The `NATSBus` implementation uses `nats.Conn.Drain()` on close to ensure in-flight messages are flushed before disconnection. The `Handler` signature `func(subject string, data []byte)` keeps handlers transport-agnostic.
+Two implementations satisfy this interface:
+- **`NATSBus`** — standard NATS with `Drain()` on close, reconnection handlers, and request/reply support.
+- **`JetStreamBus`** — opt-in via `nats.jetstream: true` in config, providing durable subscriptions, message replay, and the `EDGEMESH` persistent stream.
+
+The `PublishWithRetry()` helper retries up to 3 times with exponential backoff; exhausted retries write to the `dead_letters` SQLite table.
 
 ### 7.4 Device Registry Schema
+
+The registry manages three tables:
 
 ```sql
 CREATE TABLE IF NOT EXISTS devices (
@@ -319,8 +327,23 @@ CREATE TABLE IF NOT EXISTS devices (
     protocol   TEXT NOT NULL,
     status     TEXT NOT NULL DEFAULT 'active',
     metadata   TEXT NOT NULL DEFAULT '{}',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS latest_messages (
+    device_id TEXT PRIMARY KEY,
+    data      BLOB NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS dead_letters (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject    TEXT NOT NULL,
+    data       BLOB NOT NULL,
+    error      TEXT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-)
+);
 ```
 
 **Lifecycle States:**
@@ -350,19 +373,28 @@ for each rule in rules (top to bottom):
     AND source_proto matches message.source_proto
     AND message_type matches payload type:
         → return rule.action
+        → if action is allow AND command_target set:
+           publish command to iot.command.<command_target>
 return default_action
 ```
 
 Rules support `filepath.Match` glob patterns (e.g., `sensor-*`) and wildcard matching (`*` or empty string matches any value).
+
+Additional capabilities:
+- **Hot-reload:** the engine watches `config.yaml` via `fsnotify` and atomically swaps rules under `sync.RWMutex` on file change — no restart needed.
+- **Command routing:** rules with `command_target` and `command_action` fields trigger device-to-device commands when a matching message is allowed.
+- **Counters:** allow/deny decisions are tracked for Prometheus metrics export.
 
 ### 7.6 HTTP Consumer API
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/ingest/v1/{device_id}/telemetry` | `POST` | Ingest telemetry data from HTTP devices |
-| `/api/v1/devices/{device_id}/latest` | `GET` | Retrieve the latest telemetry message |
-| `/api/v1/devices/{device_id}/stream` | `GET` | Real-time SSE stream of telemetry |
-| `/api/v1/devices/{device_id}/command` | `POST` | Send a command to a device |
+| `/api/v1/devices/{device_id}/latest` | `GET` | Retrieve the latest telemetry message (SQLite-backed) |
+| `/api/v1/devices/{device_id}/stream` | `GET` | Real-time SSE stream (configurable capacity, drop-oldest) |
+| `/api/v1/devices/{device_id}/command` | `POST` | Send a command with request/reply acknowledgment |
+| `/health` | `GET` | Uptime, NATS status, device count, adapter names |
+| `/metrics` | `GET` | Prometheus-compatible metrics |
 
 ---
 
@@ -396,65 +428,78 @@ edgemesh/
 
 #### 8.2.1 Entrypoint (`cmd/gateway/main.go`)
 
-The entrypoint is intentionally minimal — 18 lines. It parses a single `-config` flag (defaulting to `config/config.yaml`) and delegates to `gateway.Run()`. If the gateway returns an error, it terminates with `log.Fatal`. This separation ensures the gateway logic is testable without process-level concerns.
+The entrypoint is intentionally minimal. It initializes structured logging with `slog.NewJSONHandler` (JSON output to stdout), parses a single `-config` flag (defaulting to `config/config.yaml`), and delegates to `gateway.Run()`. If the gateway returns an error, it logs via `slog.Error` and exits. This separation ensures the gateway logic is testable without process-level concerns.
 
 #### 8.2.2 Gateway (`internal/gateway/gateway.go`)
 
-The gateway orchestrator is the core wiring layer (128 lines). It performs the following sequence:
+The gateway orchestrator is the core wiring layer. It performs the following sequence:
 
 1. **Load configuration** from YAML file using `gopkg.in/yaml.v3`.
-2. **Connect to NATS** — the shared message bus for all adapters.
-3. **Open SQLite registry** — auto-creates the database and runs migrations.
-4. **Initialize the policy engine** — loads rules from configuration.
-5. **Wire the policy interceptor** — subscribes to `iot.>` on NATS, unmarshals each message, and evaluates it against the policy engine. Denied messages are logged and dropped.
-6. **Start adapters** — iterates through all configured adapters, calling `Start(ctx, bus, registry)`.
-7. **Wait for shutdown signal** — blocks on `ctx.Done()` (SIGINT/SIGTERM via `signal.NotifyContext`).
-8. **Graceful shutdown** — calls `Stop(ctx)` on each adapter with a 5-second timeout, then closes the registry and NATS bus.
+2. **Validate configuration** — checks all required fields (NATS URL, broker, listen address, DB path, rule actions) and exits with clear error messages if invalid.
+3. **Connect to NATS** — standard NATSBus or JetStreamBus depending on `nats.jetstream` config flag. Registers reconnect/disconnect handlers for structured logging.
+4. **Open SQLite registry** — auto-creates the database and runs migrations (devices, latest_messages, dead_letters tables).
+5. **Initialize the policy engine** — loads rules, provides bus reference for command routing, and starts `fsnotify` watcher for hot-reload.
+6. **Wire the policy interceptor** — subscribes to `iot.>` on NATS, unmarshals each message, and evaluates it against the policy engine. Denied messages are logged and dropped.
+7. **Start adapters** — iterates through all configured adapters, calling `Start(ctx, bus, registry)`. Provides adapter names and engine reference to HTTP adapter for `/health` and `/metrics`.
+8. **Start heartbeat goroutine** — every 60 seconds, calls `reg.MarkInactiveDevices(timeout)` to set devices not seen within the configured duration (default 5m) to `inactive`.
+9. **Wait for shutdown signal** — blocks on `ctx.Done()` (SIGINT/SIGTERM via `signal.NotifyContext`).
+10. **Graceful shutdown** — calls `Stop(ctx)` on each adapter with a 5-second timeout, then closes the registry and NATS bus.
 
 #### 8.2.3 MQTT Adapter (`internal/adapter/mqtt/mqtt.go`)
 
-The MQTT adapter (157 lines) uses the Eclipse Paho Go client to:
+The MQTT adapter uses the Eclipse Paho Go client to:
 
 - **Connect** to the broker specified in configuration, with auto-reconnect enabled.
 - **Subscribe** to the configured topic (e.g., `devices/#`) on successful connection and reconnection.
-- **Extract device ID** from the MQTT topic by splitting on `/` and indexing at the configured position.
-- **Convert payload** by parsing the JSON body as a flat key-value map. The first numeric key-value pair becomes the `TelemetryPayload` metric and value.
+- **Validate topic structure** — if the topic has fewer segments than `device_id_topic_index`, a structured error is logged and the message is dropped (preventing index-out-of-range panics).
+- **Extract device ID** from the MQTT topic by splitting on `/` and indexing at the configured position. Empty device IDs are rejected.
+- **Convert payload** by parsing the JSON body. First checks top-level keys for numeric values; if none found, walks one level into nested JSON objects. Returns a descriptive error (including the raw payload) for invalid JSON or payloads with no numeric values.
 - **Publish** the marshaled canonical message to the NATS subject `iot.telemetry.<device_id>`.
 - **Register** the device in the SQLite registry with protocol `mqtt` and status `active`.
 
-The adapter uses `sync.WaitGroup` and context cancellation for clean shutdown, disconnecting the Paho client with a 250ms drain timeout.
+The adapter uses `sync.WaitGroup` and context cancellation for clean shutdown, disconnecting the Paho client with a 250ms drain timeout. All logging uses `log/slog` with structured fields.
 
 #### 8.2.4 HTTP Adapter (`internal/adapter/http/http.go`)
 
-The HTTP adapter (330 lines) is the most feature-rich component, providing both ingestion and consumption:
+The HTTP adapter is the most feature-rich component, providing ingestion, consumption, and operational endpoints:
 
 **Ingestion (`POST /ingest/v1/{device_id}/telemetry`):**
 - Extracts `device_id` from the URL path via Go 1.22's `PathValue`.
-- Decodes the JSON body (`metric`, `value`, `unit`).
+- Decodes the JSON body (`metric`, `value`, `unit`) with `MaxBytesReader` (1 MB limit).
 - Constructs a `TelemetryPayload`, marshals to Protobuf, and publishes to NATS.
+- Increments Prometheus publish counter.
 - Returns `202 Accepted` with the generated `message_id`.
 
 **Latest Message (`GET /api/v1/devices/{device_id}/latest`):**
-- Reads from an in-memory cache (`map[string][]byte`), populated by a NATS subscription to `iot.telemetry.>`.
+- Reads from the **persistent SQLite cache** (`latest_messages` table), populated by a NATS subscription to `iot.telemetry.>`. Data survives gateway restarts.
 - Unmarshals and returns JSON representation. Returns `404` if no data exists.
 
 **Real-time Streaming (`GET /api/v1/devices/{device_id}/stream`):**
 - Implements Server-Sent Events (SSE) using `http.Flusher`.
 - Maintains per-device SSE client channels (`map[string][]chan []byte`).
 - Fan-out broadcasts new messages to all connected SSE clients for a device.
-- Bounded channels (capacity 16) prevent slow consumers from causing backpressure.
+- **Configurable channel capacity** (default 256, via `http.sse_channel_capacity`). When full, drops the oldest message and logs a structured warning.
 
 **Command Dispatch (`POST /api/v1/devices/{device_id}/command`):**
 - Decodes `action` and `params` from JSON.
-- Creates a `CommandPayload` and publishes to `iot.command.<device_id>`.
+- Creates a `CommandPayload` and uses **NATS request/reply** with a configurable timeout (`http.command_timeout`, default 5s).
+- Returns `ack_status` in the JSON response: `"ok"` (acknowledged), `"timeout"`, or `"error"`.
 
-#### 8.2.5 Message Bus (`internal/bus/bus.go`)
+**Health (`GET /health`):**
+- Returns JSON with `uptime_seconds`, `nats_connected`, `device_count`, and `adapters` list.
 
-The bus package (50 lines) provides:
-- `MessageBus` interface — the contract for publish/subscribe operations.
-- `NATSBus` struct — the sole implementation wrapping `*nats.Conn`.
+**Prometheus Metrics (`GET /metrics`):**
+- Exports `edgemesh_messages_published_total`, `edgemesh_policy_decisions_total`, `edgemesh_sse_clients_active`, and `edgemesh_registry_devices` using `prometheus/client_golang`.
+
+#### 8.2.5 Message Bus (`internal/bus/`)
+
+The bus package provides:
+- `MessageBus` interface — the contract for publish/subscribe, request/reply, and connection status.
+- `NATSBus` struct — standard NATS implementation with reconnect/disconnect handlers and `Request()` for synchronous command acknowledgment.
+- `JetStreamBus` struct (`jetstream.go`) — optional JetStream implementation with durable subscriptions, message replay, and the `EDGEMESH` persistent stream.
 - `Subscription` interface — wraps `*nats.Subscription` for clean unsubscription.
-- `Connect(url)` — factory function returning a connected `NATSBus`.
+- `Connect(url)` / `ConnectJetStream(url)` — factory functions for each bus type.
+- `PublishWithRetry()` — 3 retries with exponential backoff (100ms, 200ms, 400ms), dead-letter on exhaustion.
 - `Close()` uses `Drain()` instead of `Close()` to flush in-flight messages.
 
 #### 8.2.6 Canonical Model (`internal/canonical/canonical.go`)
@@ -468,23 +513,30 @@ The canonical package (99 lines) provides Go-level convenience functions:
 
 #### 8.2.7 Device Registry (`internal/registry/registry.go`)
 
-The registry (153 lines) manages the SQLite device table:
+The registry manages three SQLite tables (`devices`, `latest_messages`, `dead_letters`) using the **pure-Go `modernc.org/sqlite`** driver (no CGo dependency):
 
-- `New(dbPath)` — opens (or creates) the database and runs `migrate()` to create the `devices` table.
-- `Register(device)` — upserts with `INSERT ... ON CONFLICT DO UPDATE`, preserving `created_at` on re-registration.
+- `New(dbPath)` — opens (or creates) the database and runs `migrate()` to create all tables.
+- `Register(device)` — upserts with `INSERT ... ON CONFLICT DO UPDATE`, preserving `created_at` and updating `last_seen`.
 - `GetByID(deviceID)` — returns `nil` (not error) for missing devices.
 - `GetByProtocol(protocol)` — queries all devices matching a protocol.
-- `UpdateStatus(deviceID, status)` — updates the lifecycle state, returns error if device not found.
+- `UpdateStatus(deviceID, status)` — updates the lifecycle state.
+- `UpdateLastSeen(deviceID)` — bumps the `last_seen` timestamp.
+- `MarkInactiveDevices(timeout)` — marks devices as `inactive` if `last_seen` is older than the timeout.
+- `DeviceCount()` / `DeviceCountByProtocol()` — for `/health` and `/metrics` endpoints.
+- `UpsertLatestMessage(deviceID, data)` / `GetLatestMessage(deviceID)` — persistent latest-message cache.
+- `InsertDeadLetter(subject, data, err)` — records failed publish attempts.
 - `Close()` — closes the database connection.
 
 Metadata is stored as a JSON blob (`TEXT` column) and automatically marshaled/unmarshaled via `encoding/json`.
 
 #### 8.2.8 Policy Engine (`internal/policy/policy.go`)
 
-The policy engine (76 lines) provides:
+The policy engine provides:
 
 - `New(config)` — initializes with rules and a default action (defaults to `allow`).
-- `Evaluate(msg)` — iterates rules top-to-bottom, returning the first matching rule's action. Uses `filepath.Match` for glob patterns.
+- `Evaluate(msg)` — iterates rules top-to-bottom, returning the first matching rule's action. Uses `filepath.Match` for glob patterns. Increments allow/deny counters for Prometheus. Triggers command routing when `command_target` is set.
+- `SetBus(b)` — injects the message bus for device-to-device command routing.
+- `WatchConfig(ctx, path)` — starts an `fsnotify` watcher that hot-reloads policy rules when `config.yaml` changes. Rules are atomically swapped under `sync.RWMutex`.
 - `matchField(pattern, value)` — treats empty or `*` as wildcard; otherwise delegates to `filepath.Match`.
 
 #### 8.2.9 CoAP Adapter (`internal/adapter/coap/coap.go`)
@@ -506,6 +558,7 @@ All runtime configuration is in a single `config/config.yaml` file:
 ```yaml
 nats:
   url: "nats://127.0.0.1:4222"
+  jetstream: false                    # Enable JetStream for durable subs
 
 mqtt:
   broker: "tcp://127.0.0.1:1883"
@@ -516,12 +569,16 @@ mqtt:
 
 http:
   listen: ":8080"
+  sse_channel_capacity: 256           # SSE channel buffer per client
+  command_timeout: "5s"               # Command ack timeout
 
 coap:
   listen: ":5683"
 
 registry:
   db_path: "./edgemesh.db"
+
+heartbeat_timeout: "5m"                # Devices not seen → inactive
 
 policy:
   default_action: "allow"
@@ -538,6 +595,11 @@ policy:
       source_proto: "*"
       message_type: "event"
       action: "allow"
+    # Example: device-to-device command routing
+    # - device_pattern: "sensor-01"
+    #   action: "allow"
+    #   command_target: "actuator-01"
+    #   command_action: "adjust"
 ```
 
 ### 8.4 Build System
@@ -555,18 +617,19 @@ The `Makefile` provides four targets:
 
 | File | Lines of Code | Purpose |
 |---|---|---|
-| `cmd/gateway/main.go` | 18 | Entrypoint |
-| `internal/gateway/gateway.go` | 128 | Gateway orchestrator |
+| `cmd/gateway/main.go` | 23 | Entrypoint + slog init |
+| `internal/gateway/gateway.go` | 220 | Gateway orchestrator + config validation |
 | `internal/adapter/adapter.go` | 19 | Interface definition |
-| `internal/adapter/mqtt/mqtt.go` | 157 | MQTT adapter |
-| `internal/adapter/http/http.go` | 330 | HTTP adapter + consumer API |
-| `internal/adapter/coap/coap.go` | 210 | CoAP adapter (UDP) |
-| `internal/bus/bus.go` | 50 | NATS bus abstraction |
+| `internal/adapter/mqtt/mqtt.go` | 175 | MQTT adapter (nested JSON, topic validation) |
+| `internal/adapter/http/http.go` | 420 | HTTP adapter + consumer API + /health + /metrics |
+| `internal/adapter/coap/coap.go` | 230 | CoAP adapter (device ID validation) |
+| `internal/bus/bus.go` | 135 | MessageBus interface + NATSBus + retry |
+| `internal/bus/jetstream.go` | 110 | JetStreamBus implementation |
 | `internal/canonical/canonical.go` | 99 | Message constructors |
-| `internal/registry/registry.go` | 153 | SQLite device registry |
-| `internal/policy/policy.go` | 76 | Policy engine |
+| `internal/registry/registry.go` | 200 | SQLite registry (3 tables) |
+| `internal/policy/policy.go` | 195 | Policy engine (hot-reload, command routing) |
 | `proto/canonical.proto` | 38 | Protobuf schema |
-| **Total (handwritten)** | **~1,100** | **excluding generated code** |
+| **Total (handwritten)** | **~1,850** | **excluding generated code** |
 
 ---
 
@@ -600,25 +663,34 @@ The `plgd-dev/go-coap/v3` library provides a full RFC 7252 CoAP implementation f
 
 **Library:** `github.com/plgd-dev/go-coap/v3`
 
-### 9.6 Database: SQLite
+### 9.6 Database: SQLite (Pure Go)
 
 SQLite provides a zero-configuration, serverless, file-based relational database. It requires no external infrastructure, supports concurrent reads, and is ideal for edge deployments where operational simplicity is critical. The database file is created automatically on first run.
 
-**Library:** `github.com/mattn/go-sqlite3 v1.14.34` (CGo-based binding)
+**Library:** `modernc.org/sqlite` (pure-Go, no CGo — enables cross-compilation without a C toolchain)
 
 ### 9.7 Configuration: YAML
 
 YAML provides a human-readable configuration format with inline comments, hierarchical nesting, and widespread familiarity. The `gopkg.in/yaml.v3` library provides struct-tag-based unmarshaling.
 
-### 9.8 Dependency Summary
+### 9.8 Additional Libraries
+
+| Dependency | Purpose |
+|---|---|
+| `github.com/fsnotify/fsnotify` | File watcher for policy hot-reload |
+| `github.com/prometheus/client_golang` | Prometheus metrics export |
+
+### 9.9 Dependency Summary
 
 | Dependency | Version | Purpose |
 |---|---|---|
 | `google.golang.org/protobuf` | v1.33.0 | Protobuf runtime |
-| `github.com/nats-io/nats.go` | v1.31.0 | NATS client |
+| `github.com/nats-io/nats.go` | v1.31.0 | NATS client (+ JetStream) |
 | `github.com/eclipse/paho.mqtt.golang` | v1.5.1 | MQTT client |
 | `github.com/plgd-dev/go-coap/v3` | latest | CoAP server/client (RFC 7252) |
-| `github.com/mattn/go-sqlite3` | v1.14.34 | SQLite driver |
+| `modernc.org/sqlite` | latest | Pure-Go SQLite driver |
+| `github.com/fsnotify/fsnotify` | latest | File system watcher |
+| `github.com/prometheus/client_golang` | latest | Prometheus metrics |
 | `gopkg.in/yaml.v3` | v3.0.1 | YAML parser |
 
 ---
@@ -633,19 +705,23 @@ The EdgeMesh middleware successfully demonstrates:
 
 2. **Real-time streaming:** The SSE endpoint (`/api/v1/devices/{device_id}/stream`) pushes every new message to connected HTTP clients in real time, enabling dashboard and monitoring integrations.
 
-3. **Bidirectional communication:** The command endpoint (`POST /api/v1/devices/{device_id}/command`) publishes commands to `iot.command.<device_id>` on NATS, enabling any adapter subscribed to that subject to relay the command to the physical device.
+3. **Bidirectional communication with acknowledgment:** The command endpoint uses NATS request/reply with a configurable timeout. The response includes `ack_status` indicating whether the command was acknowledged, timed out, or errored.
 
-4. **Automatic device discovery:** Devices are auto-registered in the SQLite registry on first message. No manual provisioning step is required. Re-registration updates device metadata without losing creation timestamps.
+4. **Automatic device discovery with heartbeat:** Devices are auto-registered in the SQLite registry on first message with a `last_seen` timestamp. A background goroutine checks every 60 seconds and marks devices inactive if they haven't sent a message within the heartbeat timeout (default 5m).
 
-5. **Policy enforcement:** The policy engine correctly allows or denies messages based on device pattern, source protocol, and message type. Denied messages are logged with full context and dropped before reaching consumers.
+5. **Policy enforcement with hot-reload:** The policy engine correctly allows or denies messages based on device pattern, source protocol, and message type. Rules can be edited in `config.yaml` and are automatically reloaded without gateway restart. The engine also supports device-to-device command routing.
 
 6. **Graceful lifecycle:** The gateway responds to SIGINT/SIGTERM, stops all adapters with a 5-second timeout, drains the NATS connection, and closes the database cleanly.
+
+7. **Operational visibility:** The `/health` endpoint reports uptime, NATS connection status, device count, and active adapters. The `/metrics` endpoint exports Prometheus-compatible metrics for integration with monitoring stacks.
+
+8. **Reliability:** Publish retry with exponential backoff ensures messages are not lost on transient NATS failures. Messages that fail after all retries are stored in a dead-letter SQLite table for later inspection.
 
 ### 10.2 Performance Characteristics
 
 | Metric | Value |
 |---|---|
-| Binary size | ~30 MB (includes CGo SQLite binding) |
+| Binary size | ~30 MB (pure Go, no CGo) |
 | Startup time | < 100ms (to "EdgeMesh is running" log) |
 | Memory at idle | ~16 MB RSS |
 | NATS publish latency | Sub-millisecond (local) |
@@ -741,19 +817,15 @@ curl -X POST http://localhost:8080/api/v1/devices/sensor-42/command \
 
 ## 12. Limitations
 
-1. **No message persistence:** The in-memory cache stores only the latest message per device. A system restart loses all cached data. Historical queries are not supported.
+1. **No historical queries:** The persistent cache stores only the latest message per device. Time-series queries and historical data retrieval are not supported.
 
 2. **No authentication or authorization:** The HTTP API and NATS bus have no access control. Any client can ingest, consume, or send commands.
 
 3. **Single-node only:** There is no clustering, leader election, or state replication. EdgeMesh is designed for single-gateway deployments.
 
-4. **MQTT adapter assumes flat JSON:** The MQTT payload converter expects a flat JSON object with at least one numeric key-value pair. Nested or structured payloads are silently ignored.
+4. **No TLS/SSL:** Neither the HTTP server nor the NATS/MQTT connections use encrypted transport.
 
-5. **No TLS/SSL:** Neither the HTTP server nor the NATS/MQTT connections use encrypted transport.
-
-6. **Policy engine is static:** Policy rules are loaded from config at startup. There is no runtime policy reload or API for dynamic rule management.
-
-7. **CGo dependency:** The SQLite driver (`go-sqlite3`) requires CGo, which complicates cross-compilation. A pure-Go driver would improve portability.
+5. **No dynamic policy API:** While policy rules hot-reload from the config file, there is no HTTP API for programmatic rule management.
 
 ---
 
@@ -763,16 +835,16 @@ curl -X POST http://localhost:8080/api/v1/devices/sensor-42/command \
 
 - **Modbus adapter** — extend protocol coverage to industrial equipment.
 - **CoAP DTLS** — add encrypted transport for the CoAP adapter.
-- **NATS JetStream persistence** — enable message history, replay, and durable subscriptions.
 - **TLS/mTLS** — encrypt all transport channels for production deployments.
-- **Dynamic policy reload** — watch the config file for changes and hot-reload policy rules.
+- **Dynamic policy API** — HTTP API for programmatic rule management alongside file-based hot-reload.
+- **Rate limiting** — per-device and per-adapter throttling to prevent noisy neighbors.
 
 ### 13.2 Medium-term Features
 
 - **WebSocket consumer adapter** — provide real-time streaming over WebSocket for browser-based dashboards.
-- **Prometheus metrics export** — expose publish/subscribe rates, policy decisions, and registry statistics.
-- **Request/reply patterns** — add synchronous request/reply support for device commands that require acknowledgment.
-- **Rate limiting** — per-device and per-adapter throttling to prevent noisy neighbors.
+- **Time-series storage** — historical message queries alongside the latest-message cache.
+- **Dead-letter replay** — API to inspect and re-publish messages from the dead-letter table.
+- **CBOR support** — native CoAP binary encoding alongside JSON.
 
 ### 13.3 Long-term Vision
 
@@ -788,9 +860,11 @@ The architectural guarantee is: **any protocol in, any protocol out, one edge bi
 
 ## 14. Conclusion
 
-EdgeMesh demonstrates that IoT interoperability middleware does not require enterprise-scale infrastructure. By centering the design on a canonical Protobuf message, a NATS publish/subscribe bus, and a three-method adapter interface, the system achieves protocol-agnostic message routing across MQTT, HTTP, and CoAP in under 1,100 lines of Go code.
+EdgeMesh demonstrates that IoT interoperability middleware does not require enterprise-scale infrastructure. By centering the design on a canonical Protobuf message, a NATS publish/subscribe bus (with optional JetStream persistence), and a three-method adapter interface, the system achieves protocol-agnostic message routing across MQTT, HTTP, and CoAP with production-ready operational features.
 
-The architecture enforces strict separation of concerns: adapters handle protocol-specific logic at the boundary, the canonical model provides a typed internal contract, the message bus decouples all components, the registry provides automatic device discovery, and the policy engine enforces runtime access control. Adding a new protocol requires implementing three Go methods in a single file — no schema changes, no infrastructure modifications, and no existing code is touched.
+The architecture enforces strict separation of concerns: adapters handle protocol-specific logic at the boundary, the canonical model provides a typed internal contract, the message bus decouples all components, the registry provides automatic device discovery with heartbeat timeout, and the policy engine enforces runtime access control with hot-reload and device-to-device command routing. Adding a new protocol requires implementing three Go methods in a single file — no schema changes, no infrastructure modifications, and no existing code is touched.
+
+The system includes production-ready reliability features (publish retry with dead-letter, NATS reconnection, config validation), operational visibility (`/health`, Prometheus `/metrics`, structured JSON logging via `log/slog`), and builds as a pure-Go binary without CGo dependencies.
 
 EdgeMesh fills a specific gap in the IoT landscape: the space between ad-hoc protocol scripts and full-blown platform deployments. It is designed for small teams that need interoperability in minutes, not weeks, on hardware as constrained as a Raspberry Pi, without cloud dependencies or container orchestration.
 
