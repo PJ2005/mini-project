@@ -90,9 +90,8 @@
         "type": "function",
         "z": "benchmark-tab",
         "name": "Health Info",
-        "func": "var os = require('os');\nvar latest = flow.get('latest') || {};\nvar deviceCount = Object.keys(latest).length;\nvar msgCount = flow.get('msg_count') || 0;\nvar startTime = flow.get('start_time') || Date.now();\nvar uptimeSec = Math.floor((Date.now() - startTime) / 1000);\nmsg.payload = {\n    uptime_seconds: uptimeSec,\n    device_count: deviceCount,\n    messages_processed: msgCount,\n    memory: {\n        total_mb: Math.round(os.totalmem() / 1024 / 1024),\n        free_mb: Math.round(os.freemem() / 1024 / 1024),\n        used_mb: Math.round((os.totalmem() - os.freemem()) / 1024 / 1024)\n    },\n    runtime: {\n        node_version: 'Node-RED',\n        platform: os.platform(),\n        arch: os.arch()\n    }\n};\nreturn msg;",
+        "func": "var latest = flow.get('latest') || {};\nvar deviceCount = Object.keys(latest).length;\nvar msgCount = flow.get('msg_count') || 0;\nvar startTime = flow.get('start_time') || Date.now();\nvar uptimeSec = Math.floor((Date.now() - startTime) / 1000);\nmsg.payload = {\n    uptime_seconds: uptimeSec,\n    device_count: deviceCount,\n    messages_processed: msgCount,\n    runtime: 'Node-RED'\n};\nreturn msg;",
         "outputs": 1,
-        "libs": [{"var":"os","module":"os"}],
         "x": 370,
         "y": 340,
         "wires": [["http-out"]]
