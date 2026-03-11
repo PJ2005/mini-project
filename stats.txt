@@ -1,0 +1,369 @@
+aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/health | python3 -m json.tool
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   447  100   447    0     0   330k      0 --:--:-- --:--:-- --:--:--  436k
+{
+    "adapters": [
+        "mqtt",
+        "http",
+        "coap"
+    ],
+    "device_count": 2,
+    "memory": {
+        "gc_pause_ms": 0,
+        "gc_runs": 0,
+        "heap_alloc_mb": 1.5766067504882812,
+        "heap_inuse_mb": 2.7109375,
+        "stack_inuse_mb": 0.75,
+        "sys_mb": 12.517829895019531
+    },
+    "nats_connected": true,
+    "runtime": {
+        "go_version": "go1.26.1",
+        "goroutines": 30
+    },
+    "storage": {
+        "db_size_mb": 0.02734375,
+        "dead_letters": 0,
+        "latest_messages": 2
+    },
+    "throughput": {
+        "mqtt_published": 62,
+        "mqtt_received": 62,
+        "total_published": 62
+    },
+    "uptime_seconds": 1536
+}
+aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/metrics
+# HELP edgemesh_dead_letters_total Number of messages in the dead letter queue
+# TYPE edgemesh_dead_letters_total gauge
+edgemesh_dead_letters_total 0
+# HELP edgemesh_go_gc_pause_seconds GC stop-the-world pause duration
+# TYPE edgemesh_go_gc_pause_seconds histogram
+edgemesh_go_gc_pause_seconds_bucket{le="1e-05"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="5e-05"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="0.0001"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="0.0005"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="0.001"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="0.005"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="0.01"} 0
+edgemesh_go_gc_pause_seconds_bucket{le="+Inf"} 0
+edgemesh_go_gc_pause_seconds_sum 0
+edgemesh_go_gc_pause_seconds_count 0
+# HELP edgemesh_go_gc_runs_total Total number of completed GC cycles
+# TYPE edgemesh_go_gc_runs_total counter
+edgemesh_go_gc_runs_total 0
+# HELP edgemesh_go_goroutines Number of active goroutines
+# TYPE edgemesh_go_goroutines gauge
+edgemesh_go_goroutines 28
+# HELP edgemesh_go_heap_alloc_bytes Go heap bytes allocated and still in use
+# TYPE edgemesh_go_heap_alloc_bytes gauge
+edgemesh_go_heap_alloc_bytes 1.663072e+06
+# HELP edgemesh_go_heap_inuse_bytes Go heap bytes in active spans
+# TYPE edgemesh_go_heap_inuse_bytes gauge
+edgemesh_go_heap_inuse_bytes 2.842624e+06
+# HELP edgemesh_go_stack_inuse_bytes Go stack bytes in use
+# TYPE edgemesh_go_stack_inuse_bytes gauge
+edgemesh_go_stack_inuse_bytes 786432
+# HELP edgemesh_go_sys_bytes Total bytes of memory obtained from the OS
+# TYPE edgemesh_go_sys_bytes gauge
+edgemesh_go_sys_bytes 1.3125896e+07
+# HELP edgemesh_http_request_seconds HTTP request processing latency
+# TYPE edgemesh_http_request_seconds histogram
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.001"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.005"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.01"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.05"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.1"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.5"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="1"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="5"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="+Inf"} 9
+edgemesh_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/latest"} 0.0026453020000000004
+edgemesh_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/latest"} 9
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.001"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.005"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.01"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.05"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.1"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.5"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="1"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="5"} 0
+edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="+Inf"} 1
+edgemesh_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/stream"} 12.27033616
+edgemesh_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/stream"} 1
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.001"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.005"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.01"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.05"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.1"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.5"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="1"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="5"} 2
+edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="+Inf"} 2
+edgemesh_http_request_seconds_sum{method="GET",path="/health"} 0.0009665089999999999
+edgemesh_http_request_seconds_count{method="GET",path="/health"} 2
+# HELP edgemesh_message_processing_seconds Time to process a message through the adapter pipeline
+# TYPE edgemesh_message_processing_seconds histogram
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.01"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.05"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.5"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="+Inf"} 62
+edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="convert"} 0.0019716359999999997
+edgemesh_message_processing_seconds_count{adapter="mqtt",stage="convert"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0001"} 61
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.01"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.05"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.5"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="+Inf"} 62
+edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="marshal"} 0.0011990340000000007
+edgemesh_message_processing_seconds_count{adapter="mqtt",stage="marshal"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.01"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.05"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.5"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="+Inf"} 62
+edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="publish"} 0.000662583
+edgemesh_message_processing_seconds_count{adapter="mqtt",stage="publish"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0001"} 61
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.001"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.005"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.01"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.05"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.5"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="1"} 62
+edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="+Inf"} 62
+edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="total"} 0.0047221929999999995
+edgemesh_message_processing_seconds_count{adapter="mqtt",stage="total"} 62
+# HELP edgemesh_messages_published_total Total messages published to NATS per adapter
+# TYPE edgemesh_messages_published_total counter
+edgemesh_messages_published_total{adapter="mqtt"} 62
+# HELP edgemesh_messages_received_total Total messages received from devices per adapter
+# TYPE edgemesh_messages_received_total counter
+edgemesh_messages_received_total{adapter="mqtt"} 62
+# HELP edgemesh_nats_publish_seconds NATS publish latency
+# TYPE edgemesh_nats_publish_seconds histogram
+edgemesh_nats_publish_seconds_bucket{le="5e-05"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.0001"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.0005"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.001"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.005"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.01"} 62
+edgemesh_nats_publish_seconds_bucket{le="0.05"} 62
+edgemesh_nats_publish_seconds_bucket{le="+Inf"} 62
+edgemesh_nats_publish_seconds_sum 0.0003457340000000001
+edgemesh_nats_publish_seconds_count 62
+# HELP edgemesh_nats_reconnections_total Total NATS reconnection events
+# TYPE edgemesh_nats_reconnections_total counter
+edgemesh_nats_reconnections_total 0
+# HELP edgemesh_policy_decisions_total Policy allow/deny decision counts
+# TYPE edgemesh_policy_decisions_total counter
+edgemesh_policy_decisions_total{action="allow"} 62
+# HELP edgemesh_policy_evaluation_seconds Policy engine evaluation latency
+# TYPE edgemesh_policy_evaluation_seconds histogram
+edgemesh_policy_evaluation_seconds_bucket{le="1e-06"} 0
+edgemesh_policy_evaluation_seconds_bucket{le="5e-06"} 12
+edgemesh_policy_evaluation_seconds_bucket{le="1e-05"} 60
+edgemesh_policy_evaluation_seconds_bucket{le="5e-05"} 62
+edgemesh_policy_evaluation_seconds_bucket{le="0.0001"} 62
+edgemesh_policy_evaluation_seconds_bucket{le="0.0005"} 62
+edgemesh_policy_evaluation_seconds_bucket{le="0.001"} 62
+edgemesh_policy_evaluation_seconds_bucket{le="+Inf"} 62
+edgemesh_policy_evaluation_seconds_sum 0.00035769800000000026
+edgemesh_policy_evaluation_seconds_count 62
+# HELP edgemesh_registry_devices Number of registered devices by protocol and status
+# TYPE edgemesh_registry_devices gauge
+edgemesh_registry_devices{protocol="mqtt",status="active"} 1
+edgemesh_registry_devices{protocol="mqtt",status="inactive"} 1
+# HELP edgemesh_sqlite_db_size_bytes SQLite database file size in bytes
+# TYPE edgemesh_sqlite_db_size_bytes gauge
+edgemesh_sqlite_db_size_bytes 28672
+# HELP edgemesh_sse_clients_active Number of active SSE streaming clients
+# TYPE edgemesh_sse_clients_active gauge
+edgemesh_sse_clients_active 0
+# HELP edgemesh_uptime_seconds Gateway uptime in seconds
+# TYPE edgemesh_uptime_seconds gauge
+edgemesh_uptime_seconds 1560.008341174
+# HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
+# TYPE go_gc_duration_seconds summary
+go_gc_duration_seconds{quantile="0"} 0
+go_gc_duration_seconds{quantile="0.25"} 0
+go_gc_duration_seconds{quantile="0.5"} 0
+go_gc_duration_seconds{quantile="0.75"} 0
+go_gc_duration_seconds{quantile="1"} 0
+go_gc_duration_seconds_sum 0
+go_gc_duration_seconds_count 0
+# HELP go_gc_gogc_percent Heap size target percentage configured by the user, otherwise 100. This value is set by the GOGC environment variable, and the runtime/debug.SetGCPercent function. Sourced from /gc/gogc:percent.
+# TYPE go_gc_gogc_percent gauge
+go_gc_gogc_percent 100
+# HELP go_gc_gomemlimit_bytes Go runtime memory limit configured by the user, otherwise math.MaxInt64. This value is set by the GOMEMLIMIT environment variable, and the runtime/debug.SetMemoryLimit function. Sourced from /gc/gomemlimit:bytes.
+# TYPE go_gc_gomemlimit_bytes gauge
+go_gc_gomemlimit_bytes 9.223372036854776e+18
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 33
+# HELP go_info Information about the Go environment.
+# TYPE go_info gauge
+go_info{version="go1.26.1"} 1
+# HELP go_memstats_alloc_bytes Number of bytes allocated in heap and currently in use. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_alloc_bytes gauge
+go_memstats_alloc_bytes 1.680864e+06
+# HELP go_memstats_alloc_bytes_total Total number of bytes allocated in heap until now, even if released already. Equals to /gc/heap/allocs:bytes.
+# TYPE go_memstats_alloc_bytes_total counter
+go_memstats_alloc_bytes_total 1.680864e+06
+# HELP go_memstats_buck_hash_sys_bytes Number of bytes used by the profiling bucket hash table. Equals to /memory/classes/profiling/buckets:bytes.
+# TYPE go_memstats_buck_hash_sys_bytes gauge
+go_memstats_buck_hash_sys_bytes 1.444916e+06
+# HELP go_memstats_frees_total Total number of heap objects frees. Equals to /gc/heap/frees:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_frees_total counter
+go_memstats_frees_total 2021
+# HELP go_memstats_gc_sys_bytes Number of bytes used for garbage collection system metadata. Equals to /memory/classes/metadata/other:bytes.
+# TYPE go_memstats_gc_sys_bytes gauge
+go_memstats_gc_sys_bytes 2.161936e+06
+# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and currently in use, same as go_memstats_alloc_bytes. Equals to /memory/classes/heap/objects:bytes.
+# TYPE go_memstats_heap_alloc_bytes gauge
+go_memstats_heap_alloc_bytes 1.680864e+06
+# HELP go_memstats_heap_idle_bytes Number of heap bytes waiting to be used. Equals to /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_idle_bytes gauge
+go_memstats_heap_idle_bytes 4.653056e+06
+# HELP go_memstats_heap_inuse_bytes Number of heap bytes that are in use. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes
+# TYPE go_memstats_heap_inuse_bytes gauge
+go_memstats_heap_inuse_bytes 2.916352e+06
+# HELP go_memstats_heap_objects Number of currently allocated objects. Equals to /gc/heap/objects:objects.
+# TYPE go_memstats_heap_objects gauge
+go_memstats_heap_objects 17733
+# HELP go_memstats_heap_released_bytes Number of heap bytes released to OS. Equals to /memory/classes/heap/released:bytes.
+# TYPE go_memstats_heap_released_bytes gauge
+go_memstats_heap_released_bytes 4.554752e+06
+# HELP go_memstats_heap_sys_bytes Number of heap bytes obtained from system. Equals to /memory/classes/heap/objects:bytes + /memory/classes/heap/unused:bytes + /memory/classes/heap/released:bytes + /memory/classes/heap/free:bytes.
+# TYPE go_memstats_heap_sys_bytes gauge
+go_memstats_heap_sys_bytes 7.569408e+06
+# HELP go_memstats_last_gc_time_seconds Number of seconds since 1970 of last garbage collection.
+# TYPE go_memstats_last_gc_time_seconds gauge
+go_memstats_last_gc_time_seconds 0
+# HELP go_memstats_mallocs_total Total number of heap objects allocated, both live and gc-ed. Semantically a counter version for go_memstats_heap_objects gauge. Equals to /gc/heap/allocs:objects + /gc/heap/tiny/allocs:objects.
+# TYPE go_memstats_mallocs_total counter
+go_memstats_mallocs_total 19754
+# HELP go_memstats_mcache_inuse_bytes Number of bytes in use by mcache structures. Equals to /memory/classes/metadata/mcache/inuse:bytes.
+# TYPE go_memstats_mcache_inuse_bytes gauge
+go_memstats_mcache_inuse_bytes 9184
+# HELP go_memstats_mcache_sys_bytes Number of bytes used for mcache structures obtained from system. Equals to /memory/classes/metadata/mcache/inuse:bytes + /memory/classes/metadata/mcache/free:bytes.
+# TYPE go_memstats_mcache_sys_bytes gauge
+go_memstats_mcache_sys_bytes 16072
+# HELP go_memstats_mspan_inuse_bytes Number of bytes in use by mspan structures. Equals to /memory/classes/metadata/mspan/inuse:bytes.
+# TYPE go_memstats_mspan_inuse_bytes gauge
+go_memstats_mspan_inuse_bytes 65280
+# HELP go_memstats_mspan_sys_bytes Number of bytes used for mspan structures obtained from system. Equals to /memory/classes/metadata/mspan/inuse:bytes + /memory/classes/metadata/mspan/free:bytes.
+# TYPE go_memstats_mspan_sys_bytes gauge
+go_memstats_mspan_sys_bytes 65280
+# HELP go_memstats_next_gc_bytes Number of heap bytes when next garbage collection will take place. Equals to /gc/heap/goal:bytes.
+# TYPE go_memstats_next_gc_bytes gauge
+go_memstats_next_gc_bytes 4.194304e+06
+# HELP go_memstats_other_sys_bytes Number of bytes used for other system allocations. Equals to /memory/classes/other:bytes.
+# TYPE go_memstats_other_sys_bytes gauge
+go_memstats_other_sys_bytes 1.049084e+06
+# HELP go_memstats_stack_inuse_bytes Number of bytes obtained from system for stack allocator in non-CGO environments. Equals to /memory/classes/heap/stacks:bytes.
+# TYPE go_memstats_stack_inuse_bytes gauge
+go_memstats_stack_inuse_bytes 819200
+# HELP go_memstats_stack_sys_bytes Number of bytes obtained from system for stack allocator. Equals to /memory/classes/heap/stacks:bytes + /memory/classes/os-stacks:bytes.
+# TYPE go_memstats_stack_sys_bytes gauge
+go_memstats_stack_sys_bytes 819200
+# HELP go_memstats_sys_bytes Number of bytes obtained from system. Equals to /memory/classes/total:byte.
+# TYPE go_memstats_sys_bytes gauge
+go_memstats_sys_bytes 1.3125896e+07
+# HELP go_sched_gomaxprocs_threads The current runtime.GOMAXPROCS setting, or the number of operating system threads that can execute user-level Go code simultaneously. Sourced from /sched/gomaxprocs:threads.
+# TYPE go_sched_gomaxprocs_threads gauge
+go_sched_gomaxprocs_threads 4
+# HELP go_threads Number of OS threads created.
+# TYPE go_threads gauge
+go_threads 10
+# HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 0.22
+# HELP process_max_fds Maximum number of open file descriptors.
+# TYPE process_max_fds gauge
+process_max_fds 1.048575e+06
+# HELP process_network_receive_bytes_total Number of bytes received by the process over the network.
+# TYPE process_network_receive_bytes_total counter
+process_network_receive_bytes_total 2.56271586e+08
+# HELP process_network_transmit_bytes_total Number of bytes sent by the process over the network.
+# TYPE process_network_transmit_bytes_total counter
+process_network_transmit_bytes_total 1.8169498e+07
+# HELP process_open_fds Number of open file descriptors.
+# TYPE process_open_fds gauge
+process_open_fds 14
+# HELP process_resident_memory_bytes Resident memory size in bytes.
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 2.0250624e+07
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds 1.77324191133e+09
+# HELP process_virtual_memory_bytes Virtual memory size in bytes.
+# TYPE process_virtual_memory_bytes gauge
+process_virtual_memory_bytes 1.914241024e+09
+# HELP process_virtual_memory_max_bytes Maximum amount of virtual memory available in bytes.
+# TYPE process_virtual_memory_max_bytes gauge
+process_virtual_memory_max_bytes 1.8446744073709552e+19
+# HELP promhttp_metric_handler_requests_in_flight Current number of scrapes being served.
+# TYPE promhttp_metric_handler_requests_in_flight gauge
+promhttp_metric_handler_requests_in_flight 1
+# HELP promhttp_metric_handler_requests_total Total number of scrapes by HTTP status code.
+# TYPE promhttp_metric_handler_requests_total counter
+promhttp_metric_handler_requests_total{code="200"} 0
+promhttp_metric_handler_requests_total{code="500"} 0
+promhttp_metric_handler_requests_total{code="503"} 0
+
+aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/health | python3 -m json.tool
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100   447  100   447    0     0   250k      0 --:--:-- --:--:-- --:--:--  436k
+{
+    "adapters": [
+        "mqtt",
+        "http",
+        "coap"
+    ],
+    "device_count": 2,
+    "memory": {
+        "gc_pause_ms": 0,
+        "gc_runs": 0,
+        "heap_alloc_mb": 1.5484771728515625,
+        "heap_inuse_mb": 2.6953125,
+        "stack_inuse_mb": 0.75,
+        "sys_mb": 12.517829895019531
+    },
+    "nats_connected": true,
+    "runtime": {
+        "go_version": "go1.26.1",
+        "goroutines": 30
+    },
+    "storage": {
+        "db_size_mb": 0.02734375,
+        "dead_letters": 0,
+        "latest_messages": 2
+    },
+    "throughput": {
+        "mqtt_published": 60,
+        "mqtt_received": 60,
+        "total_published": 60
+    },
+    "uptime_seconds": 1523
+}
