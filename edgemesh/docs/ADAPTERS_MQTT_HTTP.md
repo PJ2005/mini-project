@@ -105,25 +105,72 @@ Response (timeout):
 {"message_id":"...","ack_status":"timeout","error":"nats: timeout"}
 ```
 
-### GET /health (Fix 14)
+### GET /health (Enhanced)
 
-Returns gateway health status:
+Returns comprehensive gateway health and performance status:
 ```json
 {
   "uptime_seconds": 3600,
   "nats_connected": true,
   "device_count": 42,
-  "adapters": ["mqtt", "http", "coap"]
+  "adapters": ["mqtt", "http", "coap"],
+  "memory": {
+    "heap_alloc_mb": 12.5,
+    "heap_inuse_mb": 16.0,
+    "stack_inuse_mb": 0.8,
+    "sys_mb": 24.3,
+    "gc_pause_ms": 0.45,
+    "gc_runs": 128
+  },
+  "runtime": {
+    "goroutines": 23,
+    "go_version": "go1.24.1"
+  },
+  "storage": {
+    "db_size_mb": 1.2,
+    "dead_letters": 0,
+    "latest_messages": 15
+  },
+  "throughput": {
+    "mqtt_received": 15420,
+    "mqtt_published": 15420,
+    "http_received": 3200,
+    "http_published": 3200,
+    "coap_received": 890,
+    "coap_published": 890,
+    "total_published": 19510
+  }
 }
 ```
 
-### GET /metrics (Fix 15)
+### GET /metrics (Prometheus)
 
-Prometheus-compatible metrics endpoint. Exports:
-- `edgemesh_messages_published_total` — per-adapter publish counts
-- `edgemesh_policy_decisions_total` — allow/deny counts
-- `edgemesh_sse_clients_active` — current SSE clients
-- `edgemesh_registry_devices` — devices by protocol
+Prometheus-compatible metrics endpoint. Exports ~20 metrics across 6 categories:
+
+| Category | Metric | Type | Labels |
+|---|---|---|---|
+| Throughput | `edgemesh_messages_published_total` | Counter | `adapter` |
+| Throughput | `edgemesh_messages_received_total` | Counter | `adapter` |
+| Latency | `edgemesh_message_processing_seconds` | Histogram | `adapter`, `stage` |
+| Latency | `edgemesh_nats_publish_seconds` | Histogram | — |
+| Latency | `edgemesh_http_request_seconds` | Histogram | `method`, `path` |
+| Latency | `edgemesh_policy_evaluation_seconds` | Histogram | — |
+| Policy | `edgemesh_policy_decisions_total` | Counter | `action` |
+| SSE | `edgemesh_sse_clients_active` | Gauge | — |
+| Registry | `edgemesh_registry_devices` | Gauge | `protocol`, `status` |
+| Storage | `edgemesh_sqlite_db_size_bytes` | Gauge | — |
+| Storage | `edgemesh_dead_letters_total` | Gauge | — |
+| Memory | `edgemesh_go_heap_alloc_bytes` | Gauge | — |
+| Memory | `edgemesh_go_heap_inuse_bytes` | Gauge | — |
+| Memory | `edgemesh_go_stack_inuse_bytes` | Gauge | — |
+| Memory | `edgemesh_go_sys_bytes` | Gauge | — |
+| GC | `edgemesh_go_gc_pause_seconds` | Histogram | — |
+| GC | `edgemesh_go_gc_runs_total` | Counter | — |
+| Runtime | `edgemesh_go_goroutines` | Gauge | — |
+| Runtime | `edgemesh_uptime_seconds` | Gauge | — |
+| NATS | `edgemesh_nats_reconnections_total` | Counter | — |
+
+The `stage` label for `edgemesh_message_processing_seconds` can be: `convert`, `unmarshal`, `marshal`, `publish`, or `total`.
 
 ## Configuration Reference
 

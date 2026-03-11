@@ -13,6 +13,7 @@ import (
 
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/metrics"
 	"edgemesh/internal/registry"
 )
 
@@ -94,33 +95,45 @@ func (a *Adapter) Stop(ctx context.Context) error {
 }
 
 func (a *Adapter) onMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+	totalStart := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic recovered in message handler", "component", "mqtt", "error", fmt.Sprintf("%v", r))
 		}
 	}()
 
+	metrics.RecordReceive("mqtt")
+
 	deviceID := a.extractDeviceID(msg.Topic())
 	if deviceID == "" {
 		return
 	}
 
+	convertStart := time.Now()
 	m, err := a.convertPayload(deviceID, msg.Payload())
 	if err != nil {
 		slog.Warn("convert error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "convert").Observe(time.Since(convertStart).Seconds())
 
+	marshalStart := time.Now()
 	data, err := canonical.Marshal(m)
 	if err != nil {
 		slog.Error("marshal error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "marshal").Observe(time.Since(marshalStart).Seconds())
 
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(m), data); err != nil {
 		slog.Error("publish error", "component", "mqtt", "device_id", deviceID, "error", err)
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "publish").Observe(time.Since(publishStart).Seconds())
+	metrics.RecordPublish("mqtt")
+
+	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "total").Observe(time.Since(totalStart).Seconds())
 
 	a.reg.Register(registry.Device{
 		DeviceID: deviceID,

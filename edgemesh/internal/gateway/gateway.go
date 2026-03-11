@@ -18,6 +18,7 @@ import (
 	adaptmqtt "edgemesh/internal/adapter/mqtt"
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/metrics"
 	"edgemesh/internal/policy"
 	"edgemesh/internal/registry"
 )
@@ -74,6 +75,9 @@ func Run(configPath string) error {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Initialize centralized metrics.
+	metrics.Init()
 
 	// NATS — Fix 11: JetStream opt-in.
 	var msgBus bus.MessageBus
@@ -161,6 +165,10 @@ func Run(configPath string) error {
 		}
 		slog.Info("adapter started", "component", "gateway", "adapter", a.Name())
 	}
+
+	// Start metrics background collectors.
+	metrics.StartCollector(ctx, reg, 10*time.Second)
+	httpAdapter.StartGaugeRefresh(ctx)
 
 	// Fix 1: heartbeat timeout background goroutine.
 	heartbeatTimeout := time.Duration(cfg.HeartbeatTimeout)

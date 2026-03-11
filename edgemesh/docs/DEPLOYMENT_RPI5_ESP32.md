@@ -68,9 +68,9 @@ go version
 
 ```bash
 # Download NATS for ARM64
-wget https://github.com/nats-io/nats-server/releases/download/v2.10.27/nats-server-v2.10.27-linux-arm64.tar.gz
-tar -xzf nats-server-v2.10.27-linux-arm64.tar.gz
-sudo mv nats-server-v2.10.27-linux-arm64/nats-server /usr/local/bin/
+wget https://github.com/nats-io/nats-server/releases/download/v2.12.5/nats-server-v2.12.5-linux-arm64.tar.gz
+tar -xzf nats-server-v2.12.5-linux-arm64.tar.gz
+sudo mv nats-server-v2.12.5-linux-arm64/nats-server /usr/local/bin/
 
 # Verify
 nats-server --version
@@ -420,8 +420,39 @@ You should see structured JSON log lines for each message received.
 You can also check the `/health` endpoint:
 
 ```bash
-curl http://192.168.1.100:8080/health
-# {"uptime_seconds":120,"nats_connected":true,"device_count":2,"adapters":["mqtt","http","coap"]}
+curl http://192.168.1.100:8080/health | python3 -m json.tool
+```
+
+Expected response (enhanced with performance data):
+```json
+{
+  "uptime_seconds": 120,
+  "nats_connected": true,
+  "device_count": 2,
+  "adapters": ["mqtt", "http", "coap"],
+  "memory": {
+    "heap_alloc_mb": 4.2,
+    "heap_inuse_mb": 6.0,
+    "stack_inuse_mb": 0.5,
+    "sys_mb": 12.1,
+    "gc_pause_ms": 0.12,
+    "gc_runs": 8
+  },
+  "runtime": {
+    "goroutines": 18,
+    "go_version": "go1.24.1"
+  },
+  "storage": {
+    "db_size_mb": 0.1,
+    "dead_letters": 0,
+    "latest_messages": 2
+  },
+  "throughput": {
+    "mqtt_received": 24,
+    "mqtt_published": 24,
+    "total_published": 24
+  }
+}
 ```
 
 ### 5.2 Query the HTTP API
@@ -472,6 +503,29 @@ curl -X POST http://192.168.1.100:8080/api/v1/devices/esp32-sensor-01/command \
 ```
 
 > **Note:** The ESP32 sketch above does not subscribe to commands. To receive commands, add an MQTT subscription to `commands/esp32-sensor-01` on the ESP32 and add a NATS-to-MQTT command relay in EdgeMesh (future enhancement).
+
+### 5.5 Monitor Performance
+
+EdgeMesh tracks ~20 performance parameters continuously. From any machine on the network:
+
+```bash
+# Memory, storage, throughput, and runtime info
+curl http://192.168.1.100:8080/health | python3 -m json.tool
+
+# Prometheus metrics (for Grafana, alerting, etc.)
+curl http://192.168.1.100:8080/metrics
+```
+
+Key metrics to watch on the RPi 5:
+
+| Metric | What to Watch | Healthy Range |
+|---|---|---|
+| `memory.heap_alloc_mb` | Go heap allocation | < 50 MB |
+| `memory.sys_mb` | Total OS memory used | < 100 MB |
+| `runtime.goroutines` | Active goroutines | 15–30 (idle) |
+| `storage.db_size_mb` | SQLite file size | Grows slowly |
+| `storage.dead_letters` | Failed publishes | Should be 0 |
+| `throughput.total_published` | Messages processed | Increases steadily |
 
 ---
 
@@ -618,3 +672,5 @@ void loop() {
 | **EdgeMesh** (RPi) | Gateway — adapters, registry, policy, API | HTTP `:8080`, CoAP `:5683` |
 
 **Data flow:** ESP32 → WiFi → Mosquitto (MQTT) / EdgeMesh (CoAP) → NATS → HTTP API → dashboards/consumers.
+
+**Monitoring:** `GET /health` (JSON) for quick checks, `GET /metrics` (Prometheus) for dashboards and alerting.

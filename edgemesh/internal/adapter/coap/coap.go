@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	coap "github.com/plgd-dev/go-coap/v3"
 	"github.com/plgd-dev/go-coap/v3/message"
@@ -17,6 +18,7 @@ import (
 
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/metrics"
 	"edgemesh/internal/registry"
 )
 
@@ -70,6 +72,9 @@ func (a *Adapter) Stop(ctx context.Context) error {
 }
 
 func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
+	totalStart := time.Now()
+	metrics.RecordReceive("coap")
+
 	deviceID, ok := a.validateDeviceID(w, req, "telemetry")
 	if !ok {
 		return
@@ -81,6 +86,7 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 		return
 	}
 
+	unmarshalStart := time.Now()
 	var payload struct {
 		Metric string  `json:"metric"`
 		Value  float64 `json:"value"`
@@ -90,18 +96,24 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 		setResponse(w, codes.BadRequest, "invalid json")
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "unmarshal").Observe(time.Since(unmarshalStart).Seconds())
 
+	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "coap", payload.Metric, payload.Value, payload.Unit)
 	data, err := canonical.Marshal(msg)
 	if err != nil {
 		setResponse(w, codes.InternalServerError, "marshal failed")
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "marshal").Observe(time.Since(marshalStart).Seconds())
 
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 		setResponse(w, codes.InternalServerError, "publish failed")
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "publish").Observe(time.Since(publishStart).Seconds())
+	metrics.RecordPublish("coap")
 
 	a.reg.Register(registry.Device{
 		DeviceID: deviceID,
@@ -109,6 +121,8 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 		Protocol: "coap",
 		Status:   "active",
 	})
+
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "total").Observe(time.Since(totalStart).Seconds())
 
 	setResponse(w, codes.Created, fmt.Sprintf(`{"message_id":"%s"}`, msg.GetMessageId()))
 	slog.Info("telemetry received",
@@ -119,6 +133,9 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 }
 
 func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
+	totalStart := time.Now()
+	metrics.RecordReceive("coap")
+
 	deviceID, ok := a.validateDeviceID(w, req, "event")
 	if !ok {
 		return
@@ -147,10 +164,13 @@ func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
 		return
 	}
 
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 		setResponse(w, codes.InternalServerError, "publish failed")
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "publish").Observe(time.Since(publishStart).Seconds())
+	metrics.RecordPublish("coap")
 
 	a.reg.Register(registry.Device{
 		DeviceID: deviceID,
@@ -158,6 +178,8 @@ func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
 		Protocol: "coap",
 		Status:   "active",
 	})
+
+	metrics.MessageProcessingDuration.WithLabelValues("coap", "total").Observe(time.Since(totalStart).Seconds())
 
 	setResponse(w, codes.Created, fmt.Sprintf(`{"message_id":"%s"}`, msg.GetMessageId()))
 	slog.Info("event received",

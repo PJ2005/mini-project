@@ -7,6 +7,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"edgemesh/internal/metrics"
 	"edgemesh/internal/registry"
 )
 
@@ -49,6 +50,7 @@ func Connect(url string, opts ...nats.Option) (*NATSBus, error) {
 		}),
 		nats.ReconnectHandler(func(_ *nats.Conn) {
 			slog.Info("NATS reconnected", "component", "bus")
+			metrics.NATSReconnections.Inc()
 			if b.reconnectHandler != nil {
 				b.reconnectHandler()
 			}
@@ -65,7 +67,10 @@ func Connect(url string, opts ...nats.Option) (*NATSBus, error) {
 }
 
 func (b *NATSBus) Publish(subject string, data []byte) error {
-	return b.conn.Publish(subject, data)
+	start := time.Now()
+	err := b.conn.Publish(subject, data)
+	metrics.NATSPublishDuration.Observe(time.Since(start).Seconds())
+	return err
 }
 
 func (b *NATSBus) Subscribe(subject string, handler Handler) (Subscription, error) {

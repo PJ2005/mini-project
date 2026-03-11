@@ -37,8 +37,9 @@ A lightweight IoT interoperability middleware that bridges MQTT, HTTP, and CoAP 
 - **Policy engine** — rule-based allow/deny with hot-reload via `fsnotify` and device-to-device command routing
 - **Command acknowledgment** — NATS request/reply with configurable timeout (default 5s)
 - **Persistent latest-message cache** — survives gateway restarts (SQLite-backed)
-- **Health endpoint** — `GET /health` returns uptime, NATS status, device count, adapter names
-- **Prometheus metrics** — `GET /metrics` with publish counts, policy decisions, SSE clients, device count
+- **Comprehensive performance monitoring** — always-on tracking of RAM, storage, latency, throughput, GC, and goroutines
+- **Health endpoint** — `GET /health` returns uptime, NATS status, memory (heap/stack/sys), GC stats, storage (DB size, dead letters), throughput (per-adapter message counts), and runtime info
+- **Prometheus metrics** — `GET /metrics` exposes ~20 metrics: message latency histograms (per adapter & stage), NATS publish latency, HTTP request duration, policy evaluation time, publish/receive counters, SSE clients, device gauges, DB size, memory, GC pauses, goroutines, uptime
 - **Structured logging** — all logs via `log/slog` with JSON output, structured fields (`component`, `device_id`, `error`)
 - **Pure-Go build** — uses `modernc.org/sqlite` (no CGo) for easy cross-compilation
 - **Config validation** — all required fields validated at startup with clear error messages
@@ -136,8 +137,9 @@ edgemesh/
 │   │   ├── canonical.pb.go          # Generated Protobuf types
 │   │   └── canonical.go             # Message constructors + helpers
 │   ├── registry/registry.go         # SQLite registry (devices, latest_messages, dead_letters)
+│   ├── metrics/metrics.go           # Centralized Prometheus metrics + runtime stats collector
 │   ├── policy/policy.go             # Policy engine (hot-reload, command routing, counters)
-│   └── gateway/gateway.go           # Wires bus, registry, policy, adapters, heartbeat, config validation
+│   └── gateway/gateway.go           # Wires bus, registry, policy, adapters, heartbeat, metrics, config validation
 ├── proto/canonical.proto             # Canonical message schema
 ├── config/config.yaml                # Runtime configuration
 ├── Makefile                          # build, run, proto, clean

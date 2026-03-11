@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/metrics"
 )
 
 type Rule struct {
@@ -70,6 +72,11 @@ func (e *Engine) SetBus(b bus.MessageBus) {
 }
 
 func (e *Engine) Evaluate(msg *canonical.Message) bool {
+	start := time.Now()
+	defer func() {
+		metrics.PolicyEvalDuration.Observe(time.Since(start).Seconds())
+	}()
+
 	e.mu.RLock()
 	rules := e.rules
 	defaultAction := e.defaultAction
@@ -92,9 +99,11 @@ func (e *Engine) Evaluate(msg *canonical.Message) bool {
 		allowed := r.Action == "allow"
 		if allowed {
 			e.Stats.incAllowed()
+			metrics.PolicyDecisions.WithLabelValues("allow").Inc()
 			e.triggerCommand(r, msg)
 		} else {
 			e.Stats.incDenied()
+			metrics.PolicyDecisions.WithLabelValues("deny").Inc()
 			slog.Warn("policy denied message",
 				"component", "policy",
 				"device_id", deviceID,
@@ -106,8 +115,10 @@ func (e *Engine) Evaluate(msg *canonical.Message) bool {
 
 	if defaultAction == "allow" {
 		e.Stats.incAllowed()
+		metrics.PolicyDecisions.WithLabelValues("allow").Inc()
 	} else {
 		e.Stats.incDenied()
+		metrics.PolicyDecisions.WithLabelValues("deny").Inc()
 	}
 	return defaultAction == "allow"
 }

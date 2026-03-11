@@ -436,26 +436,29 @@ The gateway orchestrator is the core wiring layer. It performs the following seq
 
 1. **Load configuration** from YAML file using `gopkg.in/yaml.v3`.
 2. **Validate configuration** — checks all required fields (NATS URL, broker, listen address, DB path, rule actions) and exits with clear error messages if invalid.
-3. **Connect to NATS** — standard NATSBus or JetStreamBus depending on `nats.jetstream` config flag. Registers reconnect/disconnect handlers for structured logging.
-4. **Open SQLite registry** — auto-creates the database and runs migrations (devices, latest_messages, dead_letters tables).
-5. **Initialize the policy engine** — loads rules, provides bus reference for command routing, and starts `fsnotify` watcher for hot-reload.
-6. **Wire the policy interceptor** — subscribes to `iot.>` on NATS, unmarshals each message, and evaluates it against the policy engine. Denied messages are logged and dropped.
-7. **Start adapters** — iterates through all configured adapters, calling `Start(ctx, bus, registry)`. Provides adapter names and engine reference to HTTP adapter for `/health` and `/metrics`.
-8. **Start heartbeat goroutine** — every 60 seconds, calls `reg.MarkInactiveDevices(timeout)` to set devices not seen within the configured duration (default 5m) to `inactive`.
-9. **Wait for shutdown signal** — blocks on `ctx.Done()` (SIGINT/SIGTERM via `signal.NotifyContext`).
-10. **Graceful shutdown** — calls `Stop(ctx)` on each adapter with a 5-second timeout, then closes the registry and NATS bus.
+3. **Initialize centralized metrics** — calls `metrics.Init()` to register all ~20 Prometheus metrics (throughput, latency, memory, GC, storage, runtime).
+4. **Connect to NATS** — standard NATSBus or JetStreamBus depending on `nats.jetstream` config flag. Registers reconnect/disconnect handlers for structured logging.
+5. **Open SQLite registry** — auto-creates the database and runs migrations (devices, latest_messages, dead_letters tables).
+6. **Initialize the policy engine** — loads rules, provides bus reference for command routing, and starts `fsnotify` watcher for hot-reload.
+7. **Wire the policy interceptor** — subscribes to `iot.>` on NATS, unmarshals each message, and evaluates it against the policy engine. Denied messages are logged and dropped.
+8. **Start adapters** — iterates through all configured adapters, calling `Start(ctx, bus, registry)`. Provides adapter names and engine reference to HTTP adapter.
+9. **Start metrics collectors** — `metrics.StartCollector()` runs a background goroutine every 10s to collect Go runtime stats (heap, stack, GC pauses, goroutines, DB file size, dead letter count). `httpAdapter.StartGaugeRefresh()` refreshes registry device gauges every 15s.
+10. **Start heartbeat goroutine** — every 60 seconds, calls `reg.MarkInactiveDevices(timeout)` to set devices not seen within the configured duration (default 5m) to `inactive`.
+11. **Wait for shutdown signal** — blocks on `ctx.Done()` (SIGINT/SIGTERM via `signal.NotifyContext`).
+12. **Graceful shutdown** — calls `Stop(ctx)` on each adapter with a 5-second timeout, then closes the registry and NATS bus.
 
 #### 8.2.3 MQTT Adapter (`internal/adapter/mqtt/mqtt.go`)
 
 The MQTT adapter uses the Eclipse Paho Go client to:
 
-- **Connect** to the broker specified in configuration, with auto-reconnect enabled.
-- **Subscribe** to the configured topic (e.g., `devices/#`) on successful connection and reconnection.
-- **Validate topic structure** — if the topic has fewer segments than `device_id_topic_index`, a structured error is logged and the message is dropped (preventing index-out-of-range panics).
-- **Extract device ID** from the MQTT topic by splitting on `/` and indexing at the configured position. Empty device IDs are rejected.
-- **Convert payload** by parsing the JSON body. First checks top-level keys for numeric values; if none found, walks one level into nested JSON objects. Returns a descriptive error (including the raw payload) for invalid JSON or payloads with no numeric values.
-- **Publish** the marshaled canonical message to the NATS subject `iot.telemetry.<device_id>`.
-- **Register** the device in the SQLite registry with protocol `mqtt` and status `active`.
+-   **Connect** to the broker specified in configuration, with auto-reconnect enabled.
+-   **Subscribe** to the configured topic (e.g., `devices/#`) on successful connection and reconnection.
+-   **Validate topic structure** — if the topic has fewer segments than `device_id_topic_index`, a structured error is logged and the message is dropped (preventing index-out-of-range panics).
+-   **Extract device ID** from the MQTT topic by splitting on `/` and indexing at the configured position. Empty device IDs are rejected.
+-   **Convert payload** by parsing the JSON body. First checks top-level keys for numeric values; if none found, walks one level into nested JSON objects. Returns a descriptive error (including the raw payload) for invalid JSON or payloads with no numeric values.
+-   **Publish** the marshaled canonical message to the NATS subject `iot.telemetry.<device_id>`.
+-   **Register** the device in the SQLite registry with protocol `mqtt` and status `active`.
+-   **Records per-stage processing latency** (parse, marshal, publish, total) via centralized metrics.
 
 The adapter uses `sync.WaitGroup` and context cancellation for clean shutdown, disconnecting the Paho client with a 250ms drain timeout. All logging uses `log/slog` with structured fields.
 
@@ -467,7 +470,7 @@ The HTTP adapter is the most feature-rich component, providing ingestion, consum
 - Extracts `device_id` from the URL path via Go 1.22's `PathValue`.
 - Decodes the JSON body (`metric`, `value`, `unit`) with `MaxBytesReader` (1 MB limit).
 - Constructs a `TelemetryPayload`, marshals to Protobuf, and publishes to NATS.
-- Increments Prometheus publish counter.
+- Records per-stage processing latency (marshal, publish, total) via centralized metrics.
 - Returns `202 Accepted` with the generated `message_id`.
 
 **Latest Message (`GET /api/v1/devices/{device_id}/latest`):**
@@ -479,6 +482,7 @@ The HTTP adapter is the most feature-rich component, providing ingestion, consum
 - Maintains per-device SSE client channels (`map[string][]chan []byte`).
 - Fan-out broadcasts new messages to all connected SSE clients for a device.
 - **Configurable channel capacity** (default 256, via `http.sse_channel_capacity`). When full, drops the oldest message and logs a structured warning.
+- Updates `edgemesh_sse_clients_active` gauge on connect/disconnect.
 
 **Command Dispatch (`POST /api/v1/devices/{device_id}/command`):**
 - Decodes `action` and `params` from JSON.
@@ -522,9 +526,12 @@ The registry manages three SQLite tables (`devices`, `latest_messages`, `dead_le
 - `UpdateStatus(deviceID, status)` — updates the lifecycle state.
 - `UpdateLastSeen(deviceID)` — bumps the `last_seen` timestamp.
 - `MarkInactiveDevices(timeout)` — marks devices as `inactive` if `last_seen` is older than the timeout.
-- `DeviceCount()` / `DeviceCountByProtocol()` — for `/health` and `/metrics` endpoints.
+- `DeviceCount()` / `DeviceCountByProtocol()` / `DeviceCountByStatus()` — for `/health` and `/metrics` endpoints.
 - `UpsertLatestMessage(deviceID, data)` / `GetLatestMessage(deviceID)` — persistent latest-message cache.
+- `LatestMessageCount()` — returns the count of stored latest messages (used in `/health`).
 - `InsertDeadLetter(subject, data, err)` — records failed publish attempts.
+- `DeadLetterCount()` — returns the dead letter queue depth (used by metrics collector).
+- `DBPath()` — returns the SQLite file path (used by metrics collector for file-size tracking).
 - `Close()` — closes the database connection.
 
 Metadata is stored as a JSON blob (`TEXT` column) and automatically marshaled/unmarshaled via `encoding/json`.
@@ -618,18 +625,19 @@ The `Makefile` provides four targets:
 | File | Lines of Code | Purpose |
 |---|---|---|
 | `cmd/gateway/main.go` | 23 | Entrypoint + slog init |
-| `internal/gateway/gateway.go` | 220 | Gateway orchestrator + config validation |
+| `internal/gateway/gateway.go` | 270 | Gateway orchestrator + config validation + metrics init |
 | `internal/adapter/adapter.go` | 19 | Interface definition |
-| `internal/adapter/mqtt/mqtt.go` | 175 | MQTT adapter (nested JSON, topic validation) |
-| `internal/adapter/http/http.go` | 420 | HTTP adapter + consumer API + /health + /metrics |
-| `internal/adapter/coap/coap.go` | 230 | CoAP adapter (device ID validation) |
-| `internal/bus/bus.go` | 135 | MessageBus interface + NATSBus + retry |
+| `internal/adapter/mqtt/mqtt.go` | 210 | MQTT adapter (nested JSON, topic validation, per-stage timing) |
+| `internal/adapter/http/http.go` | 500 | HTTP adapter + consumer API + health + metrics + latency middleware |
+| `internal/adapter/coap/coap.go` | 240 | CoAP adapter (device ID validation, per-stage timing) |
+| `internal/bus/bus.go` | 150 | MessageBus interface + NATSBus + retry + publish latency |
 | `internal/bus/jetstream.go` | 110 | JetStreamBus implementation |
 | `internal/canonical/canonical.go` | 99 | Message constructors |
-| `internal/registry/registry.go` | 200 | SQLite registry (3 tables) |
-| `internal/policy/policy.go` | 195 | Policy engine (hot-reload, command routing) |
+| `internal/registry/registry.go` | 300 | SQLite registry (3 tables, stats methods) |
+| `internal/metrics/metrics.go` | 336 | Centralized Prometheus metrics + runtime collector |
+| `internal/policy/policy.go` | 230 | Policy engine (hot-reload, command routing, eval timing) |
 | `proto/canonical.proto` | 38 | Protobuf schema |
-| **Total (handwritten)** | **~1,850** | **excluding generated code** |
+| **Total (handwritten)** | **~2,525** | **excluding generated code** |
 
 ---
 

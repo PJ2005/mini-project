@@ -13,19 +13,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"edgemesh/internal/bus"
 	"edgemesh/internal/canonical"
+	"edgemesh/internal/metrics"
 	"edgemesh/internal/policy"
 	"edgemesh/internal/registry"
 )
 
 type Config struct {
-	Listen            string        `yaml:"listen"`
-	SSEChannelCap     int           `yaml:"sse_channel_capacity"`
-	CommandTimeout    time.Duration `yaml:"command_timeout"`
+	Listen         string        `yaml:"listen"`
+	SSEChannelCap  int           `yaml:"sse_channel_capacity"`
+	CommandTimeout time.Duration `yaml:"command_timeout"`
 }
 
 type Adapter struct {
@@ -42,14 +42,6 @@ type Adapter struct {
 	sseClients map[string][]chan []byte
 
 	sseClientCount atomic.Int64
-
-	publishCountsMu sync.Mutex
-	publishCounts   map[string]*prometheus.CounterVec
-
-	messagesPublished *prometheus.CounterVec
-	policyDecisions   *prometheus.CounterVec
-	sseClientsGauge   prometheus.Gauge
-	registryDevices   *prometheus.GaugeVec
 }
 
 func New(cfg Config) *Adapter {
@@ -62,40 +54,18 @@ func New(cfg Config) *Adapter {
 	return &Adapter{
 		cfg:        cfg,
 		sseClients: make(map[string][]chan []byte),
-		startTime:  time.Now(),
 	}
 }
 
 func (a *Adapter) Name() string { return "http" }
 
-func (a *Adapter) SetAdapterNames(names []string) {
-	a.adapterNames = names
-}
-
-func (a *Adapter) SetPolicyEngine(e *policy.Engine) {
-	a.engine = e
-}
+func (a *Adapter) SetAdapterNames(names []string) { a.adapterNames = names }
+func (a *Adapter) SetPolicyEngine(e *policy.Engine) { a.engine = e }
 
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
 	a.bus = b
 	a.reg = reg
-
-	a.initMetrics()
-
-	_, err := a.bus.Subscribe("iot.telemetry.>", func(subject string, data []byte) {
-		deviceID := subjectDeviceID(subject)
-		if deviceID == "" {
-			return
-		}
-		if err := a.reg.UpsertLatestMessage(deviceID, data); err != nil {
-			slog.Error("upsert latest message failed", "component", "http", "device_id", deviceID, "error", err)
-		}
-
-		a.fanoutSSE(deviceID, data)
-	})
-	if err != nil {
-		return fmt.Errorf("http subscribe telemetry: %w", err)
-	}
+	a.startTime = time.Now()
 
 	mux := gohttp.NewServeMux()
 	mux.HandleFunc("POST /ingest/v1/{device_id}/telemetry", a.handleIngest)
@@ -105,18 +75,38 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	mux.HandleFunc("GET /health", a.handleHealth)
 	mux.Handle("GET /metrics", promhttp.Handler())
 
+	// Wrap with latency-tracking middleware
+	handler := a.metricsMiddleware(mux)
+
+	// Subscribe to telemetry for latest-message cache + SSE fanout.
+	_, err := b.Subscribe("iot.telemetry.>", func(subject string, data []byte) {
+		deviceID := subjectDeviceID(subject)
+		if deviceID == "" {
+			return
+		}
+		if err := reg.UpsertLatestMessage(deviceID, data); err != nil {
+			slog.Error("upsert latest message", "component", "http", "device_id", deviceID, "error", err)
+		}
+		a.fanoutSSE(deviceID, data)
+	})
+	if err != nil {
+		return fmt.Errorf("http subscribe iot.telemetry.>: %w", err)
+	}
+
 	a.server = &gohttp.Server{
 		Addr:    a.cfg.Listen,
-		Handler: mux,
-		BaseContext: func(_ net.Listener) context.Context {
-			return ctx
-		},
+		Handler: handler,
+	}
+
+	ln, err := net.Listen("tcp", a.cfg.Listen)
+	if err != nil {
+		return fmt.Errorf("http listen %s: %w", a.cfg.Listen, err)
 	}
 
 	go func() {
 		slog.Info("listening", "component", "http", "listen", a.cfg.Listen)
-		if err := a.server.ListenAndServe(); err != nil && err != gohttp.ErrServerClosed {
-			slog.Error("serve error", "component", "http", "error", err)
+		if err := a.server.Serve(ln); err != nil && !errors.Is(err, gohttp.ErrServerClosed) {
+			slog.Error("http serve error", "component", "http", "error", err)
 		}
 	}()
 
@@ -133,63 +123,34 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	return nil
 }
 
-// ── Prometheus Metrics (Fix 15) ─────────────────────────
+// ── HTTP Latency Middleware ─────────────────────────────
 
-func (a *Adapter) initMetrics() {
-	a.messagesPublished = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "edgemesh_messages_published_total",
-		Help: "Total messages published per adapter",
-	}, []string{"adapter"})
-
-	a.policyDecisions = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "edgemesh_policy_decisions_total",
-		Help: "Policy allow/deny counts",
-	}, []string{"action"})
-
-	a.sseClientsGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_sse_clients_active",
-		Help: "Number of active SSE clients",
+func (a *Adapter) metricsMiddleware(next gohttp.Handler) gohttp.Handler {
+	return gohttp.HandlerFunc(func(w gohttp.ResponseWriter, r *gohttp.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		// Normalize path for label cardinality control
+		path := normalizePath(r.URL.Path)
+		metrics.HTTPRequestDuration.WithLabelValues(r.Method, path).Observe(time.Since(start).Seconds())
 	})
-
-	a.registryDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "edgemesh_registry_devices",
-		Help: "Number of registered devices by protocol",
-	}, []string{"protocol"})
-
-	prometheus.MustRegister(a.messagesPublished, a.policyDecisions, a.sseClientsGauge, a.registryDevices)
-
-	go func() {
-		ticker := time.NewTicker(15 * time.Second)
-		defer ticker.Stop()
-		for range ticker.C {
-			a.refreshGaugeMetrics()
-		}
-	}()
 }
 
-func (a *Adapter) refreshGaugeMetrics() {
-	a.sseClientsGauge.Set(float64(a.sseClientCount.Load()))
-
-	if a.engine != nil {
-		allowed, denied := a.engine.Stats.GetCounts()
-		a.policyDecisions.WithLabelValues("allow").Add(0)
-		a.policyDecisions.WithLabelValues("deny").Add(0)
-		_ = allowed
-		_ = denied
-	}
-
-	if a.reg != nil {
-		if counts, err := a.reg.DeviceCountByProtocol(); err == nil {
-			for proto, cnt := range counts {
-				a.registryDevices.WithLabelValues(proto).Set(float64(cnt))
-			}
-		}
-	}
-}
-
-func (a *Adapter) RecordPublish(adapterName string) {
-	if a.messagesPublished != nil {
-		a.messagesPublished.WithLabelValues(adapterName).Inc()
+func normalizePath(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/ingest/"):
+		return "/ingest/v1/{device_id}/telemetry"
+	case strings.HasSuffix(path, "/latest"):
+		return "/api/v1/devices/{device_id}/latest"
+	case strings.HasSuffix(path, "/stream"):
+		return "/api/v1/devices/{device_id}/stream"
+	case strings.HasSuffix(path, "/command"):
+		return "/api/v1/devices/{device_id}/command"
+	case path == "/health":
+		return "/health"
+	case path == "/metrics":
+		return "/metrics"
+	default:
+		return path
 	}
 }
 
@@ -202,12 +163,15 @@ type ingestRequest struct {
 }
 
 func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
+	totalStart := time.Now()
 	defer func() {
 		if rv := recover(); rv != nil {
 			slog.Error("panic recovered in ingest handler", "component", "http", "error", fmt.Sprintf("%v", rv))
 			gohttp.Error(w, `{"error":"internal error"}`, gohttp.StatusInternalServerError)
 		}
 	}()
+
+	metrics.RecordReceive("http")
 
 	deviceID := r.PathValue("device_id")
 	if deviceID == "" {
@@ -228,19 +192,24 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 		return
 	}
 
+	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "http", req.Metric, req.Value, req.Unit)
 	data, err := canonical.Marshal(msg)
 	if err != nil {
 		gohttp.Error(w, `{"error":"marshal failed"}`, gohttp.StatusInternalServerError)
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("http", "marshal").Observe(time.Since(marshalStart).Seconds())
 
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 		gohttp.Error(w, `{"error":"publish failed"}`, gohttp.StatusInternalServerError)
 		return
 	}
+	metrics.MessageProcessingDuration.WithLabelValues("http", "publish").Observe(time.Since(publishStart).Seconds())
+	metrics.RecordPublish("http")
 
-	a.RecordPublish("http")
+	metrics.MessageProcessingDuration.WithLabelValues("http", "total").Observe(time.Since(totalStart).Seconds())
 
 	a.reg.Register(registry.Device{
 		DeviceID: deviceID,
@@ -254,7 +223,7 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	fmt.Fprintf(w, `{"message_id":"%s"}`, msg.GetMessageId())
 }
 
-// ── Latest (Fix 3) ─────────────────────────────────────
+// ── Latest ─────────────────────────────────────────────
 
 func (a *Adapter) handleLatest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	deviceID := r.PathValue("device_id")
@@ -279,7 +248,7 @@ func (a *Adapter) handleLatest(w gohttp.ResponseWriter, r *gohttp.Request) {
 	json.NewEncoder(w).Encode(messageToJSON(msg))
 }
 
-// ── SSE Stream (Fix 7) ─────────────────────────────────
+// ── SSE Stream ─────────────────────────────────────────
 
 func (a *Adapter) handleStream(w gohttp.ResponseWriter, r *gohttp.Request) {
 	deviceID := r.PathValue("device_id")
@@ -319,6 +288,7 @@ func (a *Adapter) addSSEClient(deviceID string, ch chan []byte) {
 	defer a.ssesMu.Unlock()
 	a.sseClients[deviceID] = append(a.sseClients[deviceID], ch)
 	a.sseClientCount.Add(1)
+	metrics.SSEClientsActive.Set(float64(a.sseClientCount.Load()))
 }
 
 func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
@@ -333,6 +303,7 @@ func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
 	}
 	close(ch)
 	a.sseClientCount.Add(-1)
+	metrics.SSEClientsActive.Set(float64(a.sseClientCount.Load()))
 }
 
 func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
@@ -356,7 +327,7 @@ func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
 	}
 }
 
-// ── Command (Fix 6) ────────────────────────────────────
+// ── Command ────────────────────────────────────────────
 
 type commandRequest struct {
 	Action string          `json:"action"`
@@ -404,7 +375,7 @@ func (a *Adapter) handleCommand(w gohttp.ResponseWriter, r *gohttp.Request) {
 		msg.GetMessageId(), string(replyData))
 }
 
-// ── Health (Fix 14) ─────────────────────────────────────
+// ── Health (Enhanced) ───────────────────────────────────
 
 func (a *Adapter) handleHealth(w gohttp.ResponseWriter, r *gohttp.Request) {
 	uptime := time.Since(a.startTime).Seconds()
@@ -421,8 +392,56 @@ func (a *Adapter) handleHealth(w gohttp.ResponseWriter, r *gohttp.Request) {
 		"adapters":       a.adapterNames,
 	}
 
+	// Memory & runtime stats
+	runtimeSnap := metrics.RuntimeSnapshot()
+	for k, v := range runtimeSnap {
+		resp[k] = v
+	}
+
+	// Storage stats
+	if a.reg != nil {
+		storage := metrics.StorageSnapshot(a.reg)
+		if lmc, err := a.reg.LatestMessageCount(); err == nil {
+			storage["latest_messages"] = lmc
+		}
+		resp["storage"] = storage
+	}
+
+	// Throughput stats
+	resp["throughput"] = metrics.ThroughputSnapshot()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// ── Registry Gauge Refresh ─────────────────────────────
+
+func (a *Adapter) StartGaugeRefresh(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				a.refreshGaugeMetrics()
+			}
+		}
+	}()
+}
+
+func (a *Adapter) refreshGaugeMetrics() {
+	if a.reg != nil {
+		if counts, err := a.reg.DeviceCountByStatus(); err == nil {
+			for key, cnt := range counts {
+				parts := strings.SplitN(key, "/", 2)
+				if len(parts) == 2 {
+					metrics.RegistryDevices.WithLabelValues(parts[0], parts[1]).Set(float64(cnt))
+				}
+			}
+		}
+	}
 }
 
 // ── Helpers ─────────────────────────────────────────────

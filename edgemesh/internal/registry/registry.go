@@ -20,22 +20,62 @@ type Device struct {
 }
 
 type Registry struct {
-	db *sql.DB
+	db     *sql.DB
+	dbPath string
 }
 
 func New(dbPath string) (*Registry, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)")
 	if err != nil {
 		return nil, fmt.Errorf("open registry db: %w", err)
 	}
+	// SQLite supports only one writer at a time. Limit connections to
+	// serialize writes and prevent SQLITE_BUSY under concurrent goroutines.
+	db.SetMaxOpenConns(1)
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("ping registry db: %w", err)
 	}
-	r := &Registry{db: db}
+	r := &Registry{db: db, dbPath: dbPath}
 	if err := r.migrate(); err != nil {
 		return nil, err
 	}
 	return r, nil
+}
+
+// DBPath returns the filesystem path to the SQLite database file.
+func (r *Registry) DBPath() string { return r.dbPath }
+
+// DeadLetterCount returns the number of messages in the dead letter queue.
+func (r *Registry) DeadLetterCount() (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM dead_letters`).Scan(&count)
+	return count, err
+}
+
+// LatestMessageCount returns the number of stored latest messages.
+func (r *Registry) LatestMessageCount() (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM latest_messages`).Scan(&count)
+	return count, err
+}
+
+// DeviceCountByStatus returns device counts grouped by status.
+func (r *Registry) DeviceCountByStatus() (map[string]int, error) {
+	rows, err := r.db.Query(`SELECT protocol, status, COUNT(*) FROM devices GROUP BY protocol, status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	counts := make(map[string]int)
+	for rows.Next() {
+		var proto, status string
+		var cnt int
+		if err := rows.Scan(&proto, &status, &cnt); err != nil {
+			return nil, err
+		}
+		counts[proto+"/"+status] = cnt
+	}
+	return counts, rows.Err()
 }
 
 func (r *Registry) migrate() error {
