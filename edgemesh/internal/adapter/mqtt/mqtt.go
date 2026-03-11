@@ -141,6 +141,12 @@ func (a *Adapter) onMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
 		Protocol: "mqtt",
 		Status:   "active",
 	})
+
+	slog.Info("telemetry received",
+		"component", "mqtt",
+		"device_id", deviceID,
+		"topic", msg.Topic(),
+		"latency_ms", time.Since(totalStart).Milliseconds())
 }
 
 func (a *Adapter) extractDeviceID(topic string) string {
