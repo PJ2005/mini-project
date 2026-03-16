@@ -1,4 +1,4 @@
-aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/health | python3 -m json.tool
+aqua@aquanexus:~/interlink/interlink $ curl http://10.82.74.41:8080/health | python3 -m json.tool
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   447  100   447    0     0   330k      0 --:--:-- --:--:-- --:--:--  436k
@@ -34,174 +34,174 @@ aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/health | pytho
     },
     "uptime_seconds": 1536
 }
-aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/metrics
-# HELP edgemesh_dead_letters_total Number of messages in the dead letter queue
-# TYPE edgemesh_dead_letters_total gauge
-edgemesh_dead_letters_total 0
-# HELP edgemesh_go_gc_pause_seconds GC stop-the-world pause duration
-# TYPE edgemesh_go_gc_pause_seconds histogram
-edgemesh_go_gc_pause_seconds_bucket{le="1e-05"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="5e-05"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="0.0001"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="0.0005"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="0.001"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="0.005"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="0.01"} 0
-edgemesh_go_gc_pause_seconds_bucket{le="+Inf"} 0
-edgemesh_go_gc_pause_seconds_sum 0
-edgemesh_go_gc_pause_seconds_count 0
-# HELP edgemesh_go_gc_runs_total Total number of completed GC cycles
-# TYPE edgemesh_go_gc_runs_total counter
-edgemesh_go_gc_runs_total 0
-# HELP edgemesh_go_goroutines Number of active goroutines
-# TYPE edgemesh_go_goroutines gauge
-edgemesh_go_goroutines 28
-# HELP edgemesh_go_heap_alloc_bytes Go heap bytes allocated and still in use
-# TYPE edgemesh_go_heap_alloc_bytes gauge
-edgemesh_go_heap_alloc_bytes 1.663072e+06
-# HELP edgemesh_go_heap_inuse_bytes Go heap bytes in active spans
-# TYPE edgemesh_go_heap_inuse_bytes gauge
-edgemesh_go_heap_inuse_bytes 2.842624e+06
-# HELP edgemesh_go_stack_inuse_bytes Go stack bytes in use
-# TYPE edgemesh_go_stack_inuse_bytes gauge
-edgemesh_go_stack_inuse_bytes 786432
-# HELP edgemesh_go_sys_bytes Total bytes of memory obtained from the OS
-# TYPE edgemesh_go_sys_bytes gauge
-edgemesh_go_sys_bytes 1.3125896e+07
-# HELP edgemesh_http_request_seconds HTTP request processing latency
-# TYPE edgemesh_http_request_seconds histogram
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.001"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.005"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.01"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.05"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.1"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.5"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="1"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="5"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="+Inf"} 9
-edgemesh_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/latest"} 0.0026453020000000004
-edgemesh_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/latest"} 9
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.001"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.005"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.01"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.05"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.1"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.5"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="1"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="5"} 0
-edgemesh_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="+Inf"} 1
-edgemesh_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/stream"} 12.27033616
-edgemesh_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/stream"} 1
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.001"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.005"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.01"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.05"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.1"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="0.5"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="1"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="5"} 2
-edgemesh_http_request_seconds_bucket{method="GET",path="/health",le="+Inf"} 2
-edgemesh_http_request_seconds_sum{method="GET",path="/health"} 0.0009665089999999999
-edgemesh_http_request_seconds_count{method="GET",path="/health"} 2
-# HELP edgemesh_message_processing_seconds Time to process a message through the adapter pipeline
-# TYPE edgemesh_message_processing_seconds histogram
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.01"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.05"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.5"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="+Inf"} 62
-edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="convert"} 0.0019716359999999997
-edgemesh_message_processing_seconds_count{adapter="mqtt",stage="convert"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0001"} 61
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.01"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.05"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.5"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="+Inf"} 62
-edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="marshal"} 0.0011990340000000007
-edgemesh_message_processing_seconds_count{adapter="mqtt",stage="marshal"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.01"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.05"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.5"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="+Inf"} 62
-edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="publish"} 0.000662583
-edgemesh_message_processing_seconds_count{adapter="mqtt",stage="publish"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0001"} 61
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.001"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.005"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.01"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.05"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.5"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="1"} 62
-edgemesh_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="+Inf"} 62
-edgemesh_message_processing_seconds_sum{adapter="mqtt",stage="total"} 0.0047221929999999995
-edgemesh_message_processing_seconds_count{adapter="mqtt",stage="total"} 62
-# HELP edgemesh_messages_published_total Total messages published to NATS per adapter
-# TYPE edgemesh_messages_published_total counter
-edgemesh_messages_published_total{adapter="mqtt"} 62
-# HELP edgemesh_messages_received_total Total messages received from devices per adapter
-# TYPE edgemesh_messages_received_total counter
-edgemesh_messages_received_total{adapter="mqtt"} 62
-# HELP edgemesh_nats_publish_seconds NATS publish latency
-# TYPE edgemesh_nats_publish_seconds histogram
-edgemesh_nats_publish_seconds_bucket{le="5e-05"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.0001"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.0005"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.001"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.005"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.01"} 62
-edgemesh_nats_publish_seconds_bucket{le="0.05"} 62
-edgemesh_nats_publish_seconds_bucket{le="+Inf"} 62
-edgemesh_nats_publish_seconds_sum 0.0003457340000000001
-edgemesh_nats_publish_seconds_count 62
-# HELP edgemesh_nats_reconnections_total Total NATS reconnection events
-# TYPE edgemesh_nats_reconnections_total counter
-edgemesh_nats_reconnections_total 0
-# HELP edgemesh_policy_decisions_total Policy allow/deny decision counts
-# TYPE edgemesh_policy_decisions_total counter
-edgemesh_policy_decisions_total{action="allow"} 62
-# HELP edgemesh_policy_evaluation_seconds Policy engine evaluation latency
-# TYPE edgemesh_policy_evaluation_seconds histogram
-edgemesh_policy_evaluation_seconds_bucket{le="1e-06"} 0
-edgemesh_policy_evaluation_seconds_bucket{le="5e-06"} 12
-edgemesh_policy_evaluation_seconds_bucket{le="1e-05"} 60
-edgemesh_policy_evaluation_seconds_bucket{le="5e-05"} 62
-edgemesh_policy_evaluation_seconds_bucket{le="0.0001"} 62
-edgemesh_policy_evaluation_seconds_bucket{le="0.0005"} 62
-edgemesh_policy_evaluation_seconds_bucket{le="0.001"} 62
-edgemesh_policy_evaluation_seconds_bucket{le="+Inf"} 62
-edgemesh_policy_evaluation_seconds_sum 0.00035769800000000026
-edgemesh_policy_evaluation_seconds_count 62
-# HELP edgemesh_registry_devices Number of registered devices by protocol and status
-# TYPE edgemesh_registry_devices gauge
-edgemesh_registry_devices{protocol="mqtt",status="active"} 1
-edgemesh_registry_devices{protocol="mqtt",status="inactive"} 1
-# HELP edgemesh_sqlite_db_size_bytes SQLite database file size in bytes
-# TYPE edgemesh_sqlite_db_size_bytes gauge
-edgemesh_sqlite_db_size_bytes 28672
-# HELP edgemesh_sse_clients_active Number of active SSE streaming clients
-# TYPE edgemesh_sse_clients_active gauge
-edgemesh_sse_clients_active 0
-# HELP edgemesh_uptime_seconds Gateway uptime in seconds
-# TYPE edgemesh_uptime_seconds gauge
-edgemesh_uptime_seconds 1560.008341174
+aqua@aquanexus:~/interlink/interlink $ curl http://10.82.74.41:8080/metrics
+# HELP interlink_dead_letters_total Number of messages in the dead letter queue
+# TYPE interlink_dead_letters_total gauge
+interlink_dead_letters_total 0
+# HELP interlink_go_gc_pause_seconds GC stop-the-world pause duration
+# TYPE interlink_go_gc_pause_seconds histogram
+interlink_go_gc_pause_seconds_bucket{le="1e-05"} 0
+interlink_go_gc_pause_seconds_bucket{le="5e-05"} 0
+interlink_go_gc_pause_seconds_bucket{le="0.0001"} 0
+interlink_go_gc_pause_seconds_bucket{le="0.0005"} 0
+interlink_go_gc_pause_seconds_bucket{le="0.001"} 0
+interlink_go_gc_pause_seconds_bucket{le="0.005"} 0
+interlink_go_gc_pause_seconds_bucket{le="0.01"} 0
+interlink_go_gc_pause_seconds_bucket{le="+Inf"} 0
+interlink_go_gc_pause_seconds_sum 0
+interlink_go_gc_pause_seconds_count 0
+# HELP interlink_go_gc_runs_total Total number of completed GC cycles
+# TYPE interlink_go_gc_runs_total counter
+interlink_go_gc_runs_total 0
+# HELP interlink_go_goroutines Number of active goroutines
+# TYPE interlink_go_goroutines gauge
+interlink_go_goroutines 28
+# HELP interlink_go_heap_alloc_bytes Go heap bytes allocated and still in use
+# TYPE interlink_go_heap_alloc_bytes gauge
+interlink_go_heap_alloc_bytes 1.663072e+06
+# HELP interlink_go_heap_inuse_bytes Go heap bytes in active spans
+# TYPE interlink_go_heap_inuse_bytes gauge
+interlink_go_heap_inuse_bytes 2.842624e+06
+# HELP interlink_go_stack_inuse_bytes Go stack bytes in use
+# TYPE interlink_go_stack_inuse_bytes gauge
+interlink_go_stack_inuse_bytes 786432
+# HELP interlink_go_sys_bytes Total bytes of memory obtained from the OS
+# TYPE interlink_go_sys_bytes gauge
+interlink_go_sys_bytes 1.3125896e+07
+# HELP interlink_http_request_seconds HTTP request processing latency
+# TYPE interlink_http_request_seconds histogram
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.001"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.005"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.01"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.05"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.1"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="0.5"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="1"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="5"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/latest",le="+Inf"} 9
+interlink_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/latest"} 0.0026453020000000004
+interlink_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/latest"} 9
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.001"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.005"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.01"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.05"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.1"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="0.5"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="1"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="5"} 0
+interlink_http_request_seconds_bucket{method="GET",path="/api/v1/devices/{device_id}/stream",le="+Inf"} 1
+interlink_http_request_seconds_sum{method="GET",path="/api/v1/devices/{device_id}/stream"} 12.27033616
+interlink_http_request_seconds_count{method="GET",path="/api/v1/devices/{device_id}/stream"} 1
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.001"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.005"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.01"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.05"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.1"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="0.5"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="1"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="5"} 2
+interlink_http_request_seconds_bucket{method="GET",path="/health",le="+Inf"} 2
+interlink_http_request_seconds_sum{method="GET",path="/health"} 0.0009665089999999999
+interlink_http_request_seconds_count{method="GET",path="/health"} 2
+# HELP interlink_message_processing_seconds Time to process a message through the adapter pipeline
+# TYPE interlink_message_processing_seconds histogram
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.0005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.01"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.05"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="0.5"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="convert",le="+Inf"} 62
+interlink_message_processing_seconds_sum{adapter="mqtt",stage="convert"} 0.0019716359999999997
+interlink_message_processing_seconds_count{adapter="mqtt",stage="convert"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0001"} 61
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.0005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.01"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.05"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="0.5"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="marshal",le="+Inf"} 62
+interlink_message_processing_seconds_sum{adapter="mqtt",stage="marshal"} 0.0011990340000000007
+interlink_message_processing_seconds_count{adapter="mqtt",stage="marshal"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.0005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.01"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.05"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="0.5"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="publish",le="+Inf"} 62
+interlink_message_processing_seconds_sum{adapter="mqtt",stage="publish"} 0.000662583
+interlink_message_processing_seconds_count{adapter="mqtt",stage="publish"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0001"} 61
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.0005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.001"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.005"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.01"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.05"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="0.5"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="1"} 62
+interlink_message_processing_seconds_bucket{adapter="mqtt",stage="total",le="+Inf"} 62
+interlink_message_processing_seconds_sum{adapter="mqtt",stage="total"} 0.0047221929999999995
+interlink_message_processing_seconds_count{adapter="mqtt",stage="total"} 62
+# HELP interlink_messages_published_total Total messages published to NATS per adapter
+# TYPE interlink_messages_published_total counter
+interlink_messages_published_total{adapter="mqtt"} 62
+# HELP interlink_messages_received_total Total messages received from devices per adapter
+# TYPE interlink_messages_received_total counter
+interlink_messages_received_total{adapter="mqtt"} 62
+# HELP interlink_nats_publish_seconds NATS publish latency
+# TYPE interlink_nats_publish_seconds histogram
+interlink_nats_publish_seconds_bucket{le="5e-05"} 62
+interlink_nats_publish_seconds_bucket{le="0.0001"} 62
+interlink_nats_publish_seconds_bucket{le="0.0005"} 62
+interlink_nats_publish_seconds_bucket{le="0.001"} 62
+interlink_nats_publish_seconds_bucket{le="0.005"} 62
+interlink_nats_publish_seconds_bucket{le="0.01"} 62
+interlink_nats_publish_seconds_bucket{le="0.05"} 62
+interlink_nats_publish_seconds_bucket{le="+Inf"} 62
+interlink_nats_publish_seconds_sum 0.0003457340000000001
+interlink_nats_publish_seconds_count 62
+# HELP interlink_nats_reconnections_total Total NATS reconnection events
+# TYPE interlink_nats_reconnections_total counter
+interlink_nats_reconnections_total 0
+# HELP interlink_policy_decisions_total Policy allow/deny decision counts
+# TYPE interlink_policy_decisions_total counter
+interlink_policy_decisions_total{action="allow"} 62
+# HELP interlink_policy_evaluation_seconds Policy engine evaluation latency
+# TYPE interlink_policy_evaluation_seconds histogram
+interlink_policy_evaluation_seconds_bucket{le="1e-06"} 0
+interlink_policy_evaluation_seconds_bucket{le="5e-06"} 12
+interlink_policy_evaluation_seconds_bucket{le="1e-05"} 60
+interlink_policy_evaluation_seconds_bucket{le="5e-05"} 62
+interlink_policy_evaluation_seconds_bucket{le="0.0001"} 62
+interlink_policy_evaluation_seconds_bucket{le="0.0005"} 62
+interlink_policy_evaluation_seconds_bucket{le="0.001"} 62
+interlink_policy_evaluation_seconds_bucket{le="+Inf"} 62
+interlink_policy_evaluation_seconds_sum 0.00035769800000000026
+interlink_policy_evaluation_seconds_count 62
+# HELP interlink_registry_devices Number of registered devices by protocol and status
+# TYPE interlink_registry_devices gauge
+interlink_registry_devices{protocol="mqtt",status="active"} 1
+interlink_registry_devices{protocol="mqtt",status="inactive"} 1
+# HELP interlink_sqlite_db_size_bytes SQLite database file size in bytes
+# TYPE interlink_sqlite_db_size_bytes gauge
+interlink_sqlite_db_size_bytes 28672
+# HELP interlink_sse_clients_active Number of active SSE streaming clients
+# TYPE interlink_sse_clients_active gauge
+interlink_sse_clients_active 0
+# HELP interlink_uptime_seconds Gateway uptime in seconds
+# TYPE interlink_uptime_seconds gauge
+interlink_uptime_seconds 1560.008341174
 # HELP go_gc_duration_seconds A summary of the wall-time pause (stop-the-world) duration in garbage collection cycles.
 # TYPE go_gc_duration_seconds summary
 go_gc_duration_seconds{quantile="0"} 0
@@ -331,7 +331,7 @@ promhttp_metric_handler_requests_total{code="200"} 0
 promhttp_metric_handler_requests_total{code="500"} 0
 promhttp_metric_handler_requests_total{code="503"} 0
 
-aqua@aquanexus:~/edgemesh/edgemesh $ curl http://10.82.74.41:8080/health | python3 -m json.tool
+aqua@aquanexus:~/interlink/interlink $ curl http://10.82.74.41:8080/health | python3 -m json.tool
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   447  100   447    0     0   250k      0 --:--:-- --:--:-- --:--:--  436k

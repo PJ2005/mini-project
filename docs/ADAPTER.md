@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Every protocol integration in EdgeMesh is an **adapter** — a struct that satisfies the `Adapter` interface in `internal/adapter/adapter.go`. Adapters are the only place where protocol-specific logic lives. They convert native messages into canonical protobuf, publish to the NATS bus, and register devices in the registry. Adapters never call each other; all communication flows through NATS.
+Every protocol integration in InterLink is an **adapter** — a struct that satisfies the `Adapter` interface in `internal/adapter/adapter.go`. Adapters are the only place where protocol-specific logic lives. They convert native messages into canonical protobuf, publish to the NATS bus, and register devices in the registry. Adapters never call each other; all communication flows through NATS.
 
 The interface:
 
@@ -36,7 +36,7 @@ This walkthrough creates a fictional Modbus adapter from scratch.
 Create `internal/adapter/modbus/modbus.go`. This is the only file needed.
 
 ```
-edgemesh/
+interlink/
 └── internal/
     └── adapter/
         └── modbus/
@@ -52,9 +52,9 @@ import (
     "context"
     "log/slog"
 
-    "edgemesh/internal/bus"
-    "edgemesh/internal/canonical"
-    "edgemesh/internal/registry"
+    "interlink/internal/bus"
+    "interlink/internal/canonical"
+    "interlink/internal/registry"
 )
 
 type Config struct {
@@ -129,7 +129,7 @@ func (a *Adapter) handleMessage(deviceID string, metric string, value float64) {
 In `internal/gateway/gateway.go`, add:
 
 ```go
-import adaptmodbus "edgemesh/internal/adapter/modbus"
+import adaptmodbus "interlink/internal/adapter/modbus"
 
 // In Run(), add to the adapters slice:
 adapters := []adapter.Adapter{

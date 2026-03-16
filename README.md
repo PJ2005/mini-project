@@ -1,4 +1,4 @@
-# EdgeMesh
+# InterLink
 
 A lightweight IoT interoperability middleware that bridges MQTT, HTTP, and CoAP devices through a canonical Protobuf model over a NATS message bus. Designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing matter.
 
@@ -51,25 +51,25 @@ A lightweight IoT interoperability middleware that bridges MQTT, HTTP, and CoAP 
 # Optional: coap-client (libcoap) for CoAP testing
 
 # 1. Clone and build (no C toolchain needed — pure Go)
-git clone <repo-url> && cd edgemesh
+git clone <repo-url> && cd interlink
 go mod tidy
-go build -o edgemesh-gateway ./cmd/gateway
+go build -o interlink-gateway ./cmd/gateway
 
 # 2. Start infrastructure
 nats-server &                    # default port 4222
 mosquitto &                      # default port 1883
 
-# 3. Run EdgeMesh
-./edgemesh-gateway -config config/config.yaml
+# 3. Run InterLink
+./interlink-gateway -config config/config.yaml
 ```
 
 ## Demo Walkthrough
 
 Open three terminals:
 
-**Terminal 1 — Start EdgeMesh:**
+**Terminal 1 — Start InterLink:**
 ```bash
-./edgemesh-gateway -config config/config.yaml
+./interlink-gateway -config config/config.yaml
 ```
 
 **Terminal 2 — Send telemetry via MQTT and HTTP:**
@@ -122,7 +122,7 @@ See [config/config.yaml](config/config.yaml) — every field has inline comments
 ## Project Structure
 
 ```
-edgemesh/
+interlink/
 ├── cmd/gateway/main.go              # Entrypoint — slog init, parses flags, calls gateway.Run()
 ├── internal/
 │   ├── adapter/

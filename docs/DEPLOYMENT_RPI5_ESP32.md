@@ -1,6 +1,6 @@
-# EdgeMesh on Raspberry Pi 5 + ESP32 — Deployment Guide
+# InterLink on Raspberry Pi 5 + ESP32 — Deployment Guide
 
-A step-by-step guide to running EdgeMesh on a Raspberry Pi 5 as the edge gateway, with an ESP32 microcontroller as the IoT sensor node. The ESP32 publishes telemetry over **MQTT** and **CoAP**; the RPi runs EdgeMesh, NATS, and Mosquitto.
+A step-by-step guide to running InterLink on a Raspberry Pi 5 as the edge gateway, with an ESP32 microcontroller as the IoT sensor node. The ESP32 publishes telemetry over **MQTT** and **CoAP**; the RPi runs InterLink, NATS, and Mosquitto.
 
 ---
 
@@ -11,7 +11,7 @@ A step-by-step guide to running EdgeMesh on a Raspberry Pi 5 as the edge gateway
 │        ESP32             │          │          Raspberry Pi 5                  │
 │                          │          │                                          │
 │  DHT22 / BME280 sensor   │          │  ┌─────────┐  ┌──────┐  ┌────────────┐  │
-│          │                │          │  │Mosquitto│  │ NATS │  │  EdgeMesh  │  │
+│          │                │          │  │Mosquitto│  │ NATS │  │  InterLink  │  │
 │  ┌───────▼───────┐       │   WiFi   │  │ :1883   │  │:4222 │  │  Gateway   │  │
 │  │ MQTT publish  │───────┼──────────┼──►         │  │      │  │            │  │
 │  │ CoAP POST     │───────┼──────────┼──┤         │  │      │  │  HTTP API  │  │
@@ -32,11 +32,11 @@ A step-by-step guide to running EdgeMesh on a Raspberry Pi 5 as the edge gateway
 3. In the imager settings (gear icon), enable:
    - **SSH** (password or key-based)
    - **WiFi** credentials (same network the ESP32 will join)
-   - **Hostname** — e.g., `edgemesh-gw`
+   - **Hostname** — e.g., `interlink-gw`
 4. Insert the microSD, power on the RPi 5, and SSH in:
 
 ```bash
-ssh pi@edgemesh-gw.local
+ssh pi@interlink-gw.local
 ```
 
 ### 1.2 System Updates
@@ -46,7 +46,7 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y git
 ```
 
-> No C toolchain is required — EdgeMesh uses the pure-Go `modernc.org/sqlite` driver.
+> No C toolchain is required — InterLink uses the pure-Go `modernc.org/sqlite` driver.
 
 ### 1.3 Install Go
 
@@ -110,16 +110,16 @@ sudo systemctl restart mosquitto
 
 ---
 
-## Part 2 — Build and Run EdgeMesh on RPi 5
+## Part 2 — Build and Run InterLink on RPi 5
 
 ### 2.1 Clone and Build
 
 ```bash
-git clone <your-repo-url> ~/edgemesh
-cd ~/edgemesh
+git clone <your-repo-url> ~/interlink
+cd ~/interlink
 
 go mod tidy
-go build -o edgemesh-gateway ./cmd/gateway
+go build -o interlink-gateway ./cmd/gateway
 ```
 
 > Build takes ~30–60 seconds on RPi 5. The binary is ~30 MB.
@@ -135,7 +135,7 @@ nats:
 
 mqtt:
   broker: "tcp://127.0.0.1:1883"
-  client_id: "edgemesh-gw-01"
+  client_id: "interlink-gw-01"
   topic: "devices/#"
   qos: 1
   device_id_topic_index: 1
@@ -149,7 +149,7 @@ coap:
   listen: ":5683"
 
 registry:
-  db_path: "./edgemesh.db"
+  db_path: "./interlink.db"
 
 heartbeat_timeout: "5m"            # Devices not seen → inactive
 
@@ -179,22 +179,22 @@ Open **three terminal sessions** (or use `tmux`):
 nats-server
 ```
 
-**Terminal 2 — EdgeMesh:**
+**Terminal 2 — InterLink:**
 ```bash
-cd ~/edgemesh
-./edgemesh-gateway -config config/config.yaml
+cd ~/interlink
+./interlink-gateway -config config/config.yaml
 ```
 
 You should see:
 
 ```json
 {"level":"INFO","msg":"connected to NATS","component":"gateway","url":"nats://127.0.0.1:4222"}
-{"level":"INFO","msg":"registry opened","component":"gateway","db_path":"./edgemesh.db"}
+{"level":"INFO","msg":"registry opened","component":"gateway","db_path":"./interlink.db"}
 {"level":"INFO","msg":"policy engine loaded","component":"gateway","rules":3,"default_action":"allow"}
 {"level":"INFO","msg":"adapter started","component":"mqtt","broker":"tcp://127.0.0.1:1883"}
 {"level":"INFO","msg":"listening","component":"http","listen":":8080"}
 {"level":"INFO","msg":"listening","component":"coap","listen":":5683","transport":"UDP"}
-{"level":"INFO","msg":"EdgeMesh is running","component":"gateway"}
+{"level":"INFO","msg":"InterLink is running","component":"gateway"}
 ```
 
 > All logs are structured JSON via `log/slog`, suitable for log aggregation tools.
@@ -241,10 +241,10 @@ You'll use this IP in the ESP32 firmware.
 Create a new sketch and paste the following. Update the WiFi and RPi IP:
 
 ```cpp
-// ── EdgeMesh ESP32 MQTT Sensor Node ──────────────────────
+// ── InterLink ESP32 MQTT Sensor Node ──────────────────────
 //
 // Reads a simulated temperature value and publishes it to
-// the EdgeMesh gateway over MQTT every 5 seconds.
+// the InterLink gateway over MQTT every 5 seconds.
 // For a real sensor, replace the random value with DHT22/BME280 readings.
 
 #include <WiFi.h>
@@ -258,7 +258,7 @@ const int   MQTT_PORT     = 1883;
 const char* DEVICE_ID     = "esp32-sensor-01";
 
 // MQTT topic: devices/<device_id>
-// EdgeMesh extracts device_id from topic index 1 (after "devices/")
+// InterLink extracts device_id from topic index 1 (after "devices/")
 String mqttTopic = String("devices/") + DEVICE_ID;
 
 WiFiClient   wifiClient;
@@ -309,7 +309,7 @@ void loop() {
   // For DHT22: float temp = dht.readTemperature();
   float temperature = 20.0 + random(0, 100) / 10.0;  // 20.0 – 29.9 °C
 
-  // EdgeMesh accepts flat or nested JSON.
+  // InterLink accepts flat or nested JSON.
   // The MQTT adapter picks the first numeric key-value pair.
   char payload[64];
   snprintf(payload, sizeof(payload), "{\"temperature\": %.1f}", temperature);
@@ -413,7 +413,7 @@ while True:
 
 ## Part 5 — Verifying the Full Pipeline
 
-### 5.1 Check EdgeMesh Logs (RPi terminal)
+### 5.1 Check InterLink Logs (RPi terminal)
 
 You should see structured JSON log lines for each message received.
 
@@ -502,11 +502,11 @@ curl -X POST http://192.168.1.100:8080/api/v1/devices/esp32-sensor-01/command \
   -d '{"action":"set_interval","params":{"seconds":10}}'
 ```
 
-> **Note:** The ESP32 sketch above does not subscribe to commands. To receive commands, add an MQTT subscription to `commands/esp32-sensor-01` on the ESP32 and add a NATS-to-MQTT command relay in EdgeMesh (future enhancement).
+> **Note:** The ESP32 sketch above does not subscribe to commands. To receive commands, add an MQTT subscription to `commands/esp32-sensor-01` on the ESP32 and add a NATS-to-MQTT command relay in InterLink (future enhancement).
 
 ### 5.5 Monitor Performance
 
-EdgeMesh tracks ~20 performance parameters continuously. From any machine on the network:
+InterLink tracks ~20 performance parameters continuously. From any machine on the network:
 
 ```bash
 # Memory, storage, throughput, and runtime info
@@ -531,7 +531,7 @@ Key metrics to watch on the RPi 5:
 
 ## Part 6 — Running as a systemd Service (Production)
 
-To keep EdgeMesh running across reboots:
+To keep InterLink running across reboots:
 
 ### 6.1 Create Service Files
 
@@ -551,16 +551,16 @@ User=pi
 WantedBy=multi-user.target
 EOF
 
-# EdgeMesh service
-sudo tee /etc/systemd/system/edgemesh.service > /dev/null <<'EOF'
+# InterLink service
+sudo tee /etc/systemd/system/interlink.service > /dev/null <<'EOF'
 [Unit]
-Description=EdgeMesh IoT Gateway
+Description=InterLink IoT Gateway
 After=network.target nats.service mosquitto.service
 Requires=nats.service mosquitto.service
 
 [Service]
-ExecStart=/home/pi/edgemesh/edgemesh-gateway -config /home/pi/edgemesh/config/config.yaml
-WorkingDirectory=/home/pi/edgemesh
+ExecStart=/home/pi/interlink/interlink-gateway -config /home/pi/interlink/config/config.yaml
+WorkingDirectory=/home/pi/interlink
 Restart=always
 User=pi
 
@@ -573,17 +573,17 @@ EOF
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable nats mosquitto edgemesh
-sudo systemctl start nats edgemesh
+sudo systemctl enable nats mosquitto interlink
+sudo systemctl start nats interlink
 ```
 
 ### 6.3 Check Status
 
 ```bash
-sudo systemctl status edgemesh
+sudo systemctl status interlink
 # Should show "active (running)"
 
-journalctl -u edgemesh -f
+journalctl -u interlink -f
 # Follow live logs
 ```
 
@@ -658,7 +658,7 @@ void loop() {
 | CoAP messages not arriving | Check UDP port 5683 is open (`sudo ufw allow 5683/udp`) |
 | `go build` fails on RPi | Ensure Go 1.22+ is installed and `GOPATH` is set correctly |
 | High CPU on RPi | Reduce ESP32 publish rate (increase `delay()` in sketch) |
-| `permission denied` on binary | Run `chmod +x edgemesh-gateway` |
+| `permission denied` on binary | Run `chmod +x interlink-gateway` |
 
 ---
 
@@ -669,8 +669,8 @@ void loop() {
 | **ESP32** | Sensor node — publishes MQTT/CoAP telemetry | WiFi client |
 | **Mosquitto** (RPi) | MQTT broker — receives ESP32 messages | `1883` |
 | **NATS** (RPi) | Internal message bus | `4222` |
-| **EdgeMesh** (RPi) | Gateway — adapters, registry, policy, API | HTTP `:8080`, CoAP `:5683` |
+| **InterLink** (RPi) | Gateway — adapters, registry, policy, API | HTTP `:8080`, CoAP `:5683` |
 
-**Data flow:** ESP32 → WiFi → Mosquitto (MQTT) / EdgeMesh (CoAP) → NATS → HTTP API → dashboards/consumers.
+**Data flow:** ESP32 → WiFi → Mosquitto (MQTT) / InterLink (CoAP) → NATS → HTTP API → dashboards/consumers.
 
 **Monitoring:** `GET /health` (JSON) for quick checks, `GET /metrics` (Prometheus) for dashboards and alerting.

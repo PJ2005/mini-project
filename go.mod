@@ -1,4 +1,4 @@
-module edgemesh
+module interlink
 
 go 1.24.0
 

@@ -1,10 +1,10 @@
-// JSON of edgemesh at 1000 messages 100/s
-aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+// JSON of interlink at 1000 messages 100/s
+aqua@aquanexus:~/interlink/interlink $ ./loadtest -broker tcp://127.0.0.1:1883 \
            -messages 1000 \
            -rate 100 \
            -concurrency 4 \
            -health http://127.0.0.1:8080/health
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    1000
   Rate:        100 msg/s
@@ -91,13 +91,13 @@ Results saved to benchmark_20260311_230552_1000msg.json
     Goroutines : 30
 
 // JSON of Node-Red for 1000 messages at 100/s
-aqua@aquanexus:~/edgemesh/edgemesh $ # Node-RED test (same messages, same rate)
+aqua@aquanexus:~/interlink/interlink $ # Node-RED test (same messages, same rate)
 ./loadtest -broker tcp://127.0.0.1:1883 \
            -messages 1000 \
            -rate 100 \
            -concurrency 4 \
            -health http://127.0.0.1:1880/health
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    1000
   Rate:        100 msg/s
@@ -154,13 +154,13 @@ Results saved to benchmark_20260311_230910_1000msg.json
     Max  : 1.682 ms
 
 -------------------------------------------------------------
-// Edgemesh 5000 messages at 500/s
-aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+// Interlink 5000 messages at 500/s
+aqua@aquanexus:~/interlink/interlink $ ./loadtest -broker tcp://127.0.0.1:1883 \
            -messages 5000 \
            -rate 500 \
            -concurrency 4 \
            -health http://127.0.0.1:8080/health
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    5000
   Rate:        500 msg/s
@@ -247,9 +247,9 @@ Results saved to benchmark_20260311_231212_5000msg.json
     Goroutines : 30
 
 // Node-Red 5000 messages at 500/s
-aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 500            -concurrency 4            -health http://127.0.0.1:1880/h
+aqua@aquanexus:~/interlink/interlink $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 500            -concurrency 4            -health http://127.0.0.1:1880/h
 ealth
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    5000
   Rate:        500 msg/s
@@ -306,13 +306,13 @@ Results saved to benchmark_20260311_231336_5000msg.json
     Max  : 4.165 ms
 
 -------------------------------------------------------------
-// Edgemesh unlimited rate (check throughput ceiling)
-aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883 \
+// Interlink unlimited rate (check throughput ceiling)
+aqua@aquanexus:~/interlink/interlink $ ./loadtest -broker tcp://127.0.0.1:1883 \
            -messages 5000 \
            -rate 0 \
            -concurrency 4 \
            -health http://127.0.0.1:8080/health
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    5000
   Rate:        0 msg/s
@@ -401,9 +401,9 @@ Results saved to benchmark_20260311_231449_5000msg.json
 -------------------------------------------------------------
 // Node-Red unlimited rate (check throughput ceiling)
 
-aqua@aquanexus:~/edgemesh/edgemesh $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 0            -concurrency 4            -health http://127.0.0.1:1880/hea
+aqua@aquanexus:~/interlink/interlink $ ./loadtest -broker tcp://127.0.0.1:1883            -messages 5000            -rate 0            -concurrency 4            -health http://127.0.0.1:1880/hea
 lth
-EdgeMesh Load Test
+InterLink Load Test
   Broker:      tcp://127.0.0.1:1883
   Messages:    5000
   Rate:        0 msg/s

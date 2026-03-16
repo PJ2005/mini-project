@@ -9,7 +9,7 @@ CoAP is designed for low-power, low-bandwidth devices (e.g. battery-operated sen
 ## CoAP Flow
 
 ```
-CoAP Device                        EdgeMesh                         NATS
+CoAP Device                        InterLink                         NATS
     │                                │                               │
     │  POST /telemetry/sensor-99     │                               │
     │  {"metric":"humidity",         │                               │

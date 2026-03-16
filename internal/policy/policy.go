@@ -13,9 +13,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 
-	"edgemesh/internal/bus"
-	"edgemesh/internal/canonical"
-	"edgemesh/internal/metrics"
+	"interlink/internal/bus"
+	"interlink/internal/canonical"
+	"interlink/internal/metrics"
 )
 
 type Rule struct {

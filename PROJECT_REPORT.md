@@ -1,4 +1,4 @@
-# EdgeMesh — Project Report
+# InterLink — Project Report
 
 **A Lightweight IoT Interoperability Middleware**
 
@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Project Title** | EdgeMesh: A Lightweight IoT Interoperability Middleware |
+| **Project Title** | InterLink: A Lightweight IoT Interoperability Middleware |
 | **Technology Stack** | Go 1.24, Protocol Buffers (proto3), NATS (+ JetStream), MQTT (Eclipse Paho), CoAP (go-coap), SQLite (pure-Go), Prometheus, HTTP/SSE, `log/slog` |
 | **Date** | March 2026 |
 
@@ -36,9 +36,9 @@
 
 The Internet of Things ecosystem is fragmented across dozens of protocols — MQTT, HTTP, CoAP, Modbus, and others — each with its own data formats, transport mechanisms, and client libraries. Existing interoperability platforms such as EdgeX Foundry and AWS Greengrass address this fragmentation, but at the cost of significant operational complexity: multi-container deployments, extensive configuration surfaces, and cloud dependencies that are unsuitable for constrained edge environments.
 
-**EdgeMesh** is a lightweight IoT interoperability middleware designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing are paramount. It bridges protocol-specific IoT devices through a **canonical Protocol Buffer message model** routed over a **NATS publish/subscribe message bus** (with optional JetStream persistence). The system features a pluggable adapter architecture with built-in MQTT, HTTP, and CoAP adapters, an SQLite-backed device registry with auto-registration and heartbeat timeout, a configurable rule-based policy engine with hot-reload and device-to-device command routing, persistent latest-message cache, publish retry with dead-letter storage, Prometheus metrics, health endpoint, config validation at startup, and a unified HTTP consumer API with real-time Server-Sent Events (SSE) streaming.
+**InterLink** is a lightweight IoT interoperability middleware designed for edge deployments where simplicity, low resource usage, and protocol-agnostic routing are paramount. It bridges protocol-specific IoT devices through a **canonical Protocol Buffer message model** routed over a **NATS publish/subscribe message bus** (with optional JetStream persistence). The system features a pluggable adapter architecture with built-in MQTT, HTTP, and CoAP adapters, an SQLite-backed device registry with auto-registration and heartbeat timeout, a configurable rule-based policy engine with hot-reload and device-to-device command routing, persistent latest-message cache, publish retry with dead-letter storage, Prometheus metrics, health endpoint, config validation at startup, and a unified HTTP consumer API with real-time Server-Sent Events (SSE) streaming.
 
-The entire system compiles to a single **pure-Go binary** (no CGo required), requires no Docker or Kubernetes infrastructure, and can be deployed on a Raspberry Pi or constrained edge gateway. All logging uses Go's `log/slog` with structured JSON output. This report presents the design rationale, architecture, implementation, and results of the EdgeMesh middleware.
+The entire system compiles to a single **pure-Go binary** (no CGo required), requires no Docker or Kubernetes infrastructure, and can be deployed on a Raspberry Pi or constrained edge gateway. All logging uses Go's `log/slog` with structured JSON output. This report presents the design rationale, architecture, implementation, and results of the InterLink middleware.
 
 ---
 
@@ -52,9 +52,9 @@ This protocol heterogeneity creates **data silos** — each device type requires
 
 ### 2.2 Motivation
 
-EdgeMesh was motivated by a gap in the IoT middleware landscape. On one end, teams write ad-hoc scripts (e.g., an MQTT-to-HTTP relay in Python) that are fragile, untestable, and impossible to extend. On the other end, platforms like EdgeX Foundry provide comprehensive interoperability but demand 50+ repositories, Docker Compose orchestration, and weeks of integration effort.
+InterLink was motivated by a gap in the IoT middleware landscape. On one end, teams write ad-hoc scripts (e.g., an MQTT-to-HTTP relay in Python) that are fragile, untestable, and impossible to extend. On the other end, platforms like EdgeX Foundry provide comprehensive interoperability but demand 50+ repositories, Docker Compose orchestration, and weeks of integration effort.
 
-EdgeMesh targets the middle ground: a **single-binary middleware** that can be deployed in minutes, handles protocol translation with compile-time safety, supports runtime policy enforcement, and can be extended to new protocols by implementing a three-method Go interface — without modifying any existing code.
+InterLink targets the middle ground: a **single-binary middleware** that can be deployed in minutes, handles protocol translation with compile-time safety, supports runtime policy enforcement, and can be extended to new protocols by implementing a three-method Go interface — without modifying any existing code.
 
 ### 2.3 Scope
 
@@ -89,15 +89,15 @@ ThingsBoard is an open-source IoT platform with device management, data visualiz
 
 ### 3.5 NATS Messaging System
 
-NATS is a lightweight, high-performance publish/subscribe messaging system written in Go. It supports subject-based addressing, wildcard subscriptions, queue groups, and request/reply. Its low latency, simple deployment (single binary), and Go-native client library make it an ideal backbone for edge messaging. EdgeMesh uses NATS as its internal bus.
+NATS is a lightweight, high-performance publish/subscribe messaging system written in Go. It supports subject-based addressing, wildcard subscriptions, queue groups, and request/reply. Its low latency, simple deployment (single binary), and Go-native client library make it an ideal backbone for edge messaging. InterLink uses NATS as its internal bus.
 
 ### 3.6 Protocol Buffers (Protobuf)
 
-Protocol Buffers is Google's language-neutral, platform-neutral serialization format. It provides compact binary encoding, forward/backward compatibility through field numbering, and code generation for Go, Java, Python, and other languages. EdgeMesh uses Protobuf (proto3) as its canonical message format to ensure type safety and efficient wire serialization.
+Protocol Buffers is Google's language-neutral, platform-neutral serialization format. It provides compact binary encoding, forward/backward compatibility through field numbering, and code generation for Go, Java, Python, and other languages. InterLink uses Protobuf (proto3) as its canonical message format to ensure type safety and efficient wire serialization.
 
 ### 3.7 Comparative Analysis
 
-| Feature | EdgeX Foundry | AWS Greengrass | Eclipse Kura | **EdgeMesh** |
+| Feature | EdgeX Foundry | AWS Greengrass | Eclipse Kura | **InterLink** |
 |---|---|---|---|---|
 | Deployment model | Docker Compose (10+ containers) | AWS-provisioned | Java/OSGi | Single Go binary |
 | Minimum memory | ~512 MB | ~128 MB + AWS agent | ~512 MB | ~16 MB |
@@ -165,7 +165,7 @@ Design and implement a lightweight, protocol-agnostic IoT middleware that:
 
 ### 6.2 Layered Architecture
 
-EdgeMesh is organized into six distinct layers, each with a single responsibility:
+InterLink is organized into six distinct layers, each with a single responsibility:
 
 | Layer | Package | Responsibility |
 |---|---|---|
@@ -235,7 +235,7 @@ The canonical message is defined in `proto/canonical.proto` using Protocol Buffe
 
 ```protobuf
 syntax = "proto3";
-package edgemesh;
+package interlink;
 
 message TelemetryPayload {
   string metric    = 1;
@@ -312,7 +312,7 @@ type MessageBus interface {
 
 Two implementations satisfy this interface:
 - **`NATSBus`** — standard NATS with `Drain()` on close, reconnection handlers, and request/reply support.
-- **`JetStreamBus`** — opt-in via `nats.jetstream: true` in config, providing durable subscriptions, message replay, and the `EDGEMESH` persistent stream.
+- **`JetStreamBus`** — opt-in via `nats.jetstream: true` in config, providing durable subscriptions, message replay, and the `INTERLINK` persistent stream.
 
 The `PublishWithRetry()` helper retries up to 3 times with exponential backoff; exhausted retries write to the `dead_letters` SQLite table.
 
@@ -403,7 +403,7 @@ Additional capabilities:
 ### 8.1 Project Structure
 
 ```
-edgemesh/
+interlink/
 ├── cmd/gateway/main.go              # Entrypoint — parses flags, calls gateway.Run()
 ├── internal/
 │   ├── adapter/
@@ -482,7 +482,7 @@ The HTTP adapter is the most feature-rich component, providing ingestion, consum
 - Maintains per-device SSE client channels (`map[string][]chan []byte`).
 - Fan-out broadcasts new messages to all connected SSE clients for a device.
 - **Configurable channel capacity** (default 256, via `http.sse_channel_capacity`). When full, drops the oldest message and logs a structured warning.
-- Updates `edgemesh_sse_clients_active` gauge on connect/disconnect.
+- Updates `interlink_sse_clients_active` gauge on connect/disconnect.
 
 **Command Dispatch (`POST /api/v1/devices/{device_id}/command`):**
 - Decodes `action` and `params` from JSON.
@@ -493,14 +493,14 @@ The HTTP adapter is the most feature-rich component, providing ingestion, consum
 - Returns JSON with `uptime_seconds`, `nats_connected`, `device_count`, and `adapters` list.
 
 **Prometheus Metrics (`GET /metrics`):**
-- Exports `edgemesh_messages_published_total`, `edgemesh_policy_decisions_total`, `edgemesh_sse_clients_active`, and `edgemesh_registry_devices` using `prometheus/client_golang`.
+- Exports `interlink_messages_published_total`, `interlink_policy_decisions_total`, `interlink_sse_clients_active`, and `interlink_registry_devices` using `prometheus/client_golang`.
 
 #### 8.2.5 Message Bus (`internal/bus/`)
 
 The bus package provides:
 - `MessageBus` interface — the contract for publish/subscribe, request/reply, and connection status.
 - `NATSBus` struct — standard NATS implementation with reconnect/disconnect handlers and `Request()` for synchronous command acknowledgment.
-- `JetStreamBus` struct (`jetstream.go`) — optional JetStream implementation with durable subscriptions, message replay, and the `EDGEMESH` persistent stream.
+- `JetStreamBus` struct (`jetstream.go`) — optional JetStream implementation with durable subscriptions, message replay, and the `INTERLINK` persistent stream.
 - `Subscription` interface — wraps `*nats.Subscription` for clean unsubscription.
 - `Connect(url)` / `ConnectJetStream(url)` — factory functions for each bus type.
 - `PublishWithRetry()` — 3 retries with exponential backoff (100ms, 200ms, 400ms), dead-letter on exhaustion.
@@ -569,7 +569,7 @@ nats:
 
 mqtt:
   broker: "tcp://127.0.0.1:1883"
-  client_id: "edgemesh-gw-01"
+  client_id: "interlink-gw-01"
   topic: "devices/#"
   qos: 1
   device_id_topic_index: 1
@@ -583,7 +583,7 @@ coap:
   listen: ":5683"
 
 registry:
-  db_path: "./edgemesh.db"
+  db_path: "./interlink.db"
 
 heartbeat_timeout: "5m"                # Devices not seen → inactive
 
@@ -615,10 +615,10 @@ The `Makefile` provides four targets:
 
 | Target | Command | Description |
 |---|---|---|
-| `build` | `go build -o edgemesh-gateway ./cmd/gateway` | Compile to single binary |
+| `build` | `go build -o interlink-gateway ./cmd/gateway` | Compile to single binary |
 | `run` | Depends on `build`, then executes with config | Build and run |
 | `proto` | `protoc --go_out=...` | Regenerate Protobuf Go code |
-| `clean` | `rm -f edgemesh-gateway *.db` | Remove binary and database files |
+| `clean` | `rm -f interlink-gateway *.db` | Remove binary and database files |
 
 ### 8.5 Code Metrics
 
@@ -707,7 +707,7 @@ YAML provides a human-readable configuration format with inline comments, hierar
 
 ### 10.1 Functional Results
 
-The EdgeMesh middleware successfully demonstrates:
+The InterLink middleware successfully demonstrates:
 
 1. **Cross-protocol message routing:** An MQTT sensor publishing JSON to `devices/sensor-42` is automatically converted to a canonical Protobuf message and made available via the HTTP consumer API at `/api/v1/devices/sensor-42/latest` — with zero manual configuration.
 
@@ -730,7 +730,7 @@ The EdgeMesh middleware successfully demonstrates:
 | Metric | Value |
 |---|---|
 | Binary size | ~30 MB (pure Go, no CGo) |
-| Startup time | < 100ms (to "EdgeMesh is running" log) |
+| Startup time | < 100ms (to "InterLink is running" log) |
 | Memory at idle | ~16 MB RSS |
 | NATS publish latency | Sub-millisecond (local) |
 | Protobuf marshal/unmarshal | < 1μs per message |
@@ -741,7 +741,7 @@ The EdgeMesh middleware successfully demonstrates:
 
 2. **Compile-time safety:** Protobuf `oneof` ensures all consumers know the exact set of payload types. Adding a new payload type produces compilation errors in uncovered switch cases.
 
-3. **Zero external infrastructure:** Beyond the NATS server and MQTT broker (both single-binary deployments), EdgeMesh requires no external databases, caches, or orchestration tooling.
+3. **Zero external infrastructure:** Beyond the NATS server and MQTT broker (both single-binary deployments), InterLink requires no external databases, caches, or orchestration tooling.
 
 4. **Operational simplicity:** Single configuration file, single binary, structured logging. The `Makefile` provides all necessary operations.
 
@@ -757,12 +757,12 @@ The EdgeMesh middleware successfully demonstrates:
 
 **Step 1 — Build and run:**
 ```bash
-cd edgemesh
+cd interlink
 go mod tidy
-go build -o edgemesh-gateway ./cmd/gateway
+go build -o interlink-gateway ./cmd/gateway
 nats-server &
 mosquitto &
-./edgemesh-gateway -config config/config.yaml
+./interlink-gateway -config config/config.yaml
 ```
 
 **Step 2 — Publish telemetry via MQTT:**
@@ -829,7 +829,7 @@ curl -X POST http://localhost:8080/api/v1/devices/sensor-42/command \
 
 2. **No authentication or authorization:** The HTTP API and NATS bus have no access control. Any client can ingest, consume, or send commands.
 
-3. **Single-node only:** There is no clustering, leader election, or state replication. EdgeMesh is designed for single-gateway deployments.
+3. **Single-node only:** There is no clustering, leader election, or state replication. InterLink is designed for single-gateway deployments.
 
 4. **No TLS/SSL:** Neither the HTTP server nor the NATS/MQTT connections use encrypted transport.
 
@@ -868,13 +868,13 @@ The architectural guarantee is: **any protocol in, any protocol out, one edge bi
 
 ## 14. Conclusion
 
-EdgeMesh demonstrates that IoT interoperability middleware does not require enterprise-scale infrastructure. By centering the design on a canonical Protobuf message, a NATS publish/subscribe bus (with optional JetStream persistence), and a three-method adapter interface, the system achieves protocol-agnostic message routing across MQTT, HTTP, and CoAP with production-ready operational features.
+InterLink demonstrates that IoT interoperability middleware does not require enterprise-scale infrastructure. By centering the design on a canonical Protobuf message, a NATS publish/subscribe bus (with optional JetStream persistence), and a three-method adapter interface, the system achieves protocol-agnostic message routing across MQTT, HTTP, and CoAP with production-ready operational features.
 
 The architecture enforces strict separation of concerns: adapters handle protocol-specific logic at the boundary, the canonical model provides a typed internal contract, the message bus decouples all components, the registry provides automatic device discovery with heartbeat timeout, and the policy engine enforces runtime access control with hot-reload and device-to-device command routing. Adding a new protocol requires implementing three Go methods in a single file — no schema changes, no infrastructure modifications, and no existing code is touched.
 
 The system includes production-ready reliability features (publish retry with dead-letter, NATS reconnection, config validation), operational visibility (`/health`, Prometheus `/metrics`, structured JSON logging via `log/slog`), and builds as a pure-Go binary without CGo dependencies.
 
-EdgeMesh fills a specific gap in the IoT landscape: the space between ad-hoc protocol scripts and full-blown platform deployments. It is designed for small teams that need interoperability in minutes, not weeks, on hardware as constrained as a Raspberry Pi, without cloud dependencies or container orchestration.
+InterLink fills a specific gap in the IoT landscape: the space between ad-hoc protocol scripts and full-blown platform deployments. It is designed for small teams that need interoperability in minutes, not weeks, on hardware as constrained as a Raspberry Pi, without cloud dependencies or container orchestration.
 
 ---
 

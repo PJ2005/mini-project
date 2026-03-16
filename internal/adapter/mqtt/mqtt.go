@@ -11,10 +11,10 @@ import (
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
 
-	"edgemesh/internal/bus"
-	"edgemesh/internal/canonical"
-	"edgemesh/internal/metrics"
-	"edgemesh/internal/registry"
+	"interlink/internal/bus"
+	"interlink/internal/canonical"
+	"interlink/internal/metrics"
+	"interlink/internal/registry"
 )
 
 type Config struct {

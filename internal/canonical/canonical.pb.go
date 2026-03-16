@@ -335,7 +335,7 @@ var File_proto_canonical_proto protoreflect.FileDescriptor
 
 const file_proto_canonical_proto_rawDesc = "" +
 	"\n" +
-	"\x15proto/canonical.proto\x12\bedgemesh\"T\n" +
+	"\x15proto/canonical.proto\x12\binterlink\"T\n" +
 	"\x10TelemetryPayload\x12\x16\n" +
 	"\x06metric\x18\x01 \x01(\tR\x06metric\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x12\n" +
@@ -355,14 +355,14 @@ const file_proto_canonical_proto_rawDesc = "" +
 	"\ftimestamp_ms\x18\x03 \x01(\x03R\vtimestampMs\x12!\n" +
 	"\fsource_proto\x18\x04 \x01(\tR\vsourceProto\x12:\n" +
 	"\ttelemetry\x18\n" +
-	" \x01(\v2\x1a.edgemesh.TelemetryPayloadH\x00R\ttelemetry\x124\n" +
-	"\acommand\x18\v \x01(\v2\x18.edgemesh.CommandPayloadH\x00R\acommand\x12.\n" +
-	"\x05event\x18\f \x01(\v2\x16.edgemesh.EventPayloadH\x00R\x05event\x12;\n" +
-	"\bmetadata\x18\x14 \x03(\v2\x1f.edgemesh.Message.MetadataEntryR\bmetadata\x1a;\n" +
+	" \x01(\v2\x1a.interlink.TelemetryPayloadH\x00R\ttelemetry\x124\n" +
+	"\acommand\x18\v \x01(\v2\x18.interlink.CommandPayloadH\x00R\acommand\x12.\n" +
+	"\x05event\x18\f \x01(\v2\x16.interlink.EventPayloadH\x00R\x05event\x12;\n" +
+	"\bmetadata\x18\x14 \x03(\v2\x1f.interlink.Message.MetadataEntryR\bmetadata\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\t\n" +
-	"\apayloadB\x1dZ\x1bedgemesh/internal/canonicalb\x06proto3"
+	"\apayloadB\x1dZ\x1binterlink/internal/canonicalb\x06proto3"
 
 var (
 	file_proto_canonical_proto_rawDescOnce sync.Once
@@ -378,17 +378,17 @@ func file_proto_canonical_proto_rawDescGZIP() []byte {
 
 var file_proto_canonical_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_canonical_proto_goTypes = []any{
-	(*TelemetryPayload)(nil), // 0: edgemesh.TelemetryPayload
-	(*CommandPayload)(nil),   // 1: edgemesh.CommandPayload
-	(*EventPayload)(nil),     // 2: edgemesh.EventPayload
-	(*Message)(nil),          // 3: edgemesh.Message
-	nil,                      // 4: edgemesh.Message.MetadataEntry
+	(*TelemetryPayload)(nil), // 0: interlink.TelemetryPayload
+	(*CommandPayload)(nil),   // 1: interlink.CommandPayload
+	(*EventPayload)(nil),     // 2: interlink.EventPayload
+	(*Message)(nil),          // 3: interlink.Message
+	nil,                      // 4: interlink.Message.MetadataEntry
 }
 var file_proto_canonical_proto_depIdxs = []int32{
-	0, // 0: edgemesh.Message.telemetry:type_name -> edgemesh.TelemetryPayload
-	1, // 1: edgemesh.Message.command:type_name -> edgemesh.CommandPayload
-	2, // 2: edgemesh.Message.event:type_name -> edgemesh.EventPayload
-	4, // 3: edgemesh.Message.metadata:type_name -> edgemesh.Message.MetadataEntry
+	0, // 0: interlink.Message.telemetry:type_name -> interlink.TelemetryPayload
+	1, // 1: interlink.Message.command:type_name -> interlink.CommandPayload
+	2, // 2: interlink.Message.event:type_name -> interlink.EventPayload
+	4, // 3: interlink.Message.metadata:type_name -> interlink.Message.MetadataEntry
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name

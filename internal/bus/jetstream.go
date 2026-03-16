@@ -17,12 +17,12 @@ type JetStreamBus struct {
 }
 
 const (
-	streamName     = "EDGEMESH"
+	streamName     = "INTERLINK"
 	streamSubjects = "iot.>"
 )
 
 // ConnectJetStream connects to NATS and initialises JetStream, creating or
-// updating the EDGEMESH stream as needed.
+// updating the INTERLINK stream as needed.
 func ConnectJetStream(url string) (*JetStreamBus, error) {
 	b := &JetStreamBus{}
 
@@ -74,7 +74,7 @@ func (b *JetStreamBus) Publish(subject string, data []byte) error {
 }
 
 func (b *JetStreamBus) Subscribe(subject string, handler Handler) (Subscription, error) {
-	durable := "edgemesh-" + subject
+	durable := "interlink-" + subject
 	sub, err := b.js.Subscribe(subject, func(msg *nats.Msg) {
 		handler(msg.Subject, msg.Data)
 		msg.Ack()

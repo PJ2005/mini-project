@@ -1,11 +1,11 @@
-# Slide 1 — EdgeMesh: Lightweight IoT Interoperability Middleware
+# Slide 1 — InterLink: Lightweight IoT Interoperability Middleware
 
 - Bridges IoT protocols through a canonical Protobuf model
 - Runs at the edge — no cloud dependency, no CGo required
 - NATS message bus (with optional JetStream) decouples all protocol adapters
 - Pure-Go codebase, single binary, structured JSON logging
 
-NOTE: EdgeMesh exists because most IoT middleware (EdgeX, AWS Greengrass) assumes enterprise scale. EdgeMesh is for teams that need protocol translation in under an hour with zero infrastructure overhead.
+NOTE: InterLink exists because most IoT middleware (EdgeX, AWS Greengrass) assumes enterprise scale. InterLink is for teams that need protocol translation in under an hour with zero infrastructure overhead.
 
 ---
 
@@ -17,7 +17,7 @@ NOTE: EdgeMesh exists because most IoT middleware (EdgeX, AWS Greengrass) assume
 - Edge gateways today are either too simple or too complex
 - No lightweight standard for canonical device message exchange
 
-NOTE: A factory floor might have Modbus PLCs, MQTT sensors, and HTTP cameras — today each needs its own pipeline. EdgeMesh eliminates that with one internal contract.
+NOTE: A factory floor might have Modbus PLCs, MQTT sensors, and HTTP cameras — today each needs its own pipeline. InterLink eliminates that with one internal contract.
 
 ---
 
@@ -30,7 +30,7 @@ NOTE: A factory floor might have Modbus PLCs, MQTT sensors, and HTTP cameras —
 - Policy engine with hot-reload and device-to-device command routing
 - `/health` and `/metrics` endpoints for operational visibility
 
-NOTE: The key insight is that protocol translation is a solved problem per-protocol. The unsolved problem is the internal contract. EdgeMesh solves that with one Protobuf schema and a three-segment NATS subject: iot.<type>.<device_id>.
+NOTE: The key insight is that protocol translation is a solved problem per-protocol. The unsolved problem is the internal contract. InterLink solves that with one Protobuf schema and a three-segment NATS subject: iot.<type>.<device_id>.
 
 ---
 
@@ -94,7 +94,7 @@ NOTE: The ADAPTER.md doc walks through creating a new adapter step-by-step. Emph
 - **`/health`** — uptime, NATS status, device count, adapter names
 - **`/metrics`** — Prometheus-compatible metrics endpoint
 
-NOTE: These operational features make EdgeMesh production-ready. The health and metrics endpoints integrate with standard monitoring stacks.
+NOTE: These operational features make InterLink production-ready. The health and metrics endpoints integrate with standard monitoring stacks.
 
 ---
 
@@ -106,7 +106,7 @@ NOTE: These operational features make EdgeMesh production-ready. The health and 
 - Target: small teams needing protocol bridge in hours, not weeks
 - Runs on Raspberry Pi, edge gateways, and constrained VMs
 
-NOTE: The strategic gap is between "write your own MQTT-to-HTTP script" and "deploy EdgeX Foundry." EdgeMesh fills that gap.
+NOTE: The strategic gap is between "write your own MQTT-to-HTTP script" and "deploy EdgeX Foundry." InterLink fills that gap.
 
 ---
 

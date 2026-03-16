@@ -3,7 +3,7 @@
 ## MQTT Flow
 
 ```
-MQTT Broker                       EdgeMesh                         NATS
+MQTT Broker                       InterLink                         NATS
     │                                │                               │
     │  publish devices/sensor-42     │                               │
     │  {"temperature": 23.5}         │                               │
@@ -35,7 +35,7 @@ MQTT Broker                       EdgeMesh                         NATS
 ## HTTP Ingest Flow
 
 ```
-Client                            EdgeMesh                         NATS
+Client                            InterLink                         NATS
   │                                  │                               │
   │ POST /ingest/v1/pump-01/telemetry                                │
   │ {"metric":"pressure","value":4.2,"unit":"bar"}                   │
@@ -149,28 +149,28 @@ Prometheus-compatible metrics endpoint. Exports ~20 metrics across 6 categories:
 
 | Category | Metric | Type | Labels |
 |---|---|---|---|
-| Throughput | `edgemesh_messages_published_total` | Counter | `adapter` |
-| Throughput | `edgemesh_messages_received_total` | Counter | `adapter` |
-| Latency | `edgemesh_message_processing_seconds` | Histogram | `adapter`, `stage` |
-| Latency | `edgemesh_nats_publish_seconds` | Histogram | — |
-| Latency | `edgemesh_http_request_seconds` | Histogram | `method`, `path` |
-| Latency | `edgemesh_policy_evaluation_seconds` | Histogram | — |
-| Policy | `edgemesh_policy_decisions_total` | Counter | `action` |
-| SSE | `edgemesh_sse_clients_active` | Gauge | — |
-| Registry | `edgemesh_registry_devices` | Gauge | `protocol`, `status` |
-| Storage | `edgemesh_sqlite_db_size_bytes` | Gauge | — |
-| Storage | `edgemesh_dead_letters_total` | Gauge | — |
-| Memory | `edgemesh_go_heap_alloc_bytes` | Gauge | — |
-| Memory | `edgemesh_go_heap_inuse_bytes` | Gauge | — |
-| Memory | `edgemesh_go_stack_inuse_bytes` | Gauge | — |
-| Memory | `edgemesh_go_sys_bytes` | Gauge | — |
-| GC | `edgemesh_go_gc_pause_seconds` | Histogram | — |
-| GC | `edgemesh_go_gc_runs_total` | Counter | — |
-| Runtime | `edgemesh_go_goroutines` | Gauge | — |
-| Runtime | `edgemesh_uptime_seconds` | Gauge | — |
-| NATS | `edgemesh_nats_reconnections_total` | Counter | — |
+| Throughput | `interlink_messages_published_total` | Counter | `adapter` |
+| Throughput | `interlink_messages_received_total` | Counter | `adapter` |
+| Latency | `interlink_message_processing_seconds` | Histogram | `adapter`, `stage` |
+| Latency | `interlink_nats_publish_seconds` | Histogram | — |
+| Latency | `interlink_http_request_seconds` | Histogram | `method`, `path` |
+| Latency | `interlink_policy_evaluation_seconds` | Histogram | — |
+| Policy | `interlink_policy_decisions_total` | Counter | `action` |
+| SSE | `interlink_sse_clients_active` | Gauge | — |
+| Registry | `interlink_registry_devices` | Gauge | `protocol`, `status` |
+| Storage | `interlink_sqlite_db_size_bytes` | Gauge | — |
+| Storage | `interlink_dead_letters_total` | Gauge | — |
+| Memory | `interlink_go_heap_alloc_bytes` | Gauge | — |
+| Memory | `interlink_go_heap_inuse_bytes` | Gauge | — |
+| Memory | `interlink_go_stack_inuse_bytes` | Gauge | — |
+| Memory | `interlink_go_sys_bytes` | Gauge | — |
+| GC | `interlink_go_gc_pause_seconds` | Histogram | — |
+| GC | `interlink_go_gc_runs_total` | Counter | — |
+| Runtime | `interlink_go_goroutines` | Gauge | — |
+| Runtime | `interlink_uptime_seconds` | Gauge | — |
+| NATS | `interlink_nats_reconnections_total` | Counter | — |
 
-The `stage` label for `edgemesh_message_processing_seconds` can be: `convert`, `unmarshal`, `marshal`, `publish`, or `total`.
+The `stage` label for `interlink_message_processing_seconds` can be: `convert`, `unmarshal`, `marshal`, `publish`, or `total`.
 
 ## Configuration Reference
 
@@ -181,7 +181,7 @@ nats:
 
 mqtt:
   broker: "tcp://127.0.0.1:1883"        # MQTT broker address
-  client_id: "edgemesh-gw-01"           # Unique client ID
+  client_id: "interlink-gw-01"           # Unique client ID
   topic: "devices/#"                    # Subscription topic filter
   qos: 1                               # 0|1|2
   device_id_topic_index: 1             # Index in topic split by '/'
@@ -192,7 +192,7 @@ http:
   command_timeout: "5s"                 # Command ack timeout
 
 registry:
-  db_path: "./edgemesh.db"              # SQLite file path
+  db_path: "./interlink.db"              # SQLite file path
 
 heartbeat_timeout: "5m"                  # Devices not seen → inactive
 ```

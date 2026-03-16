@@ -17,115 +17,115 @@ import (
 var (
 	// Throughput
 	MessagesPublished = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "edgemesh_messages_published_total",
+		Name: "interlink_messages_published_total",
 		Help: "Total messages published to NATS per adapter",
 	}, []string{"adapter"})
 
 	MessagesReceived = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "edgemesh_messages_received_total",
+		Name: "interlink_messages_received_total",
 		Help: "Total messages received from devices per adapter",
 	}, []string{"adapter"})
 
 	// Latency
 	MessageProcessingDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "edgemesh_message_processing_seconds",
+		Name:    "interlink_message_processing_seconds",
 		Help:    "Time to process a message through the adapter pipeline",
 		Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
 	}, []string{"adapter", "stage"})
 
 	NATSPublishDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "edgemesh_nats_publish_seconds",
+		Name:    "interlink_nats_publish_seconds",
 		Help:    "NATS publish latency",
 		Buckets: []float64{0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05},
 	})
 
 	HTTPRequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "edgemesh_http_request_seconds",
+		Name:    "interlink_http_request_seconds",
 		Help:    "HTTP request processing latency",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5},
 	}, []string{"method", "path"})
 
 	PolicyEvalDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "edgemesh_policy_evaluation_seconds",
+		Name:    "interlink_policy_evaluation_seconds",
 		Help:    "Policy engine evaluation latency",
 		Buckets: []float64{0.000001, 0.000005, 0.00001, 0.00005, 0.0001, 0.0005, 0.001},
 	})
 
 	// Policy
 	PolicyDecisions = prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "edgemesh_policy_decisions_total",
+		Name: "interlink_policy_decisions_total",
 		Help: "Policy allow/deny decision counts",
 	}, []string{"action"})
 
 	// SSE
 	SSEClientsActive = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_sse_clients_active",
+		Name: "interlink_sse_clients_active",
 		Help: "Number of active SSE streaming clients",
 	})
 
 	// Registry
 	RegistryDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "edgemesh_registry_devices",
+		Name: "interlink_registry_devices",
 		Help: "Number of registered devices by protocol and status",
 	}, []string{"protocol", "status"})
 
 	// Storage
 	SQLiteDBSizeBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_sqlite_db_size_bytes",
+		Name: "interlink_sqlite_db_size_bytes",
 		Help: "SQLite database file size in bytes",
 	})
 
 	DeadLettersTotal = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_dead_letters_total",
+		Name: "interlink_dead_letters_total",
 		Help: "Number of messages in the dead letter queue",
 	})
 
 	// Memory
 	GoHeapAllocBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_go_heap_alloc_bytes",
+		Name: "interlink_go_heap_alloc_bytes",
 		Help: "Go heap bytes allocated and still in use",
 	})
 
 	GoHeapInuseBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_go_heap_inuse_bytes",
+		Name: "interlink_go_heap_inuse_bytes",
 		Help: "Go heap bytes in active spans",
 	})
 
 	GoStackInuseBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_go_stack_inuse_bytes",
+		Name: "interlink_go_stack_inuse_bytes",
 		Help: "Go stack bytes in use",
 	})
 
 	GoSysBytes = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_go_sys_bytes",
+		Name: "interlink_go_sys_bytes",
 		Help: "Total bytes of memory obtained from the OS",
 	})
 
 	// GC
 	GoGCPauseDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    "edgemesh_go_gc_pause_seconds",
+		Name:    "interlink_go_gc_pause_seconds",
 		Help:    "GC stop-the-world pause duration",
 		Buckets: []float64{0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01},
 	})
 
 	GoGCRunsTotal = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "edgemesh_go_gc_runs_total",
+		Name: "interlink_go_gc_runs_total",
 		Help: "Total number of completed GC cycles",
 	})
 
 	// Runtime
 	GoGoroutines = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_go_goroutines",
+		Name: "interlink_go_goroutines",
 		Help: "Number of active goroutines",
 	})
 
 	UptimeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "edgemesh_uptime_seconds",
+		Name: "interlink_uptime_seconds",
 		Help: "Gateway uptime in seconds",
 	})
 
 	NATSReconnections = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "edgemesh_nats_reconnections_total",
+		Name: "interlink_nats_reconnections_total",
 		Help: "Total NATS reconnection events",
 	})
 )

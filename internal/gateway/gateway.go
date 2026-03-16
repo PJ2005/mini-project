@@ -12,15 +12,15 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"edgemesh/internal/adapter"
-	adaptcoap "edgemesh/internal/adapter/coap"
-	adapthttp "edgemesh/internal/adapter/http"
-	adaptmqtt "edgemesh/internal/adapter/mqtt"
-	"edgemesh/internal/bus"
-	"edgemesh/internal/canonical"
-	"edgemesh/internal/metrics"
-	"edgemesh/internal/policy"
-	"edgemesh/internal/registry"
+	"interlink/internal/adapter"
+	adaptcoap "interlink/internal/adapter/coap"
+	adapthttp "interlink/internal/adapter/http"
+	adaptmqtt "interlink/internal/adapter/mqtt"
+	"interlink/internal/bus"
+	"interlink/internal/canonical"
+	"interlink/internal/metrics"
+	"interlink/internal/policy"
+	"interlink/internal/registry"
 )
 
 type Config struct {
@@ -196,7 +196,7 @@ func Run(configPath string) error {
 		}
 	}()
 
-	slog.Info("EdgeMesh is running", "component", "gateway")
+	slog.Info("InterLink is running", "component", "gateway")
 	<-ctx.Done()
 	slog.Info("shutting down...", "component", "gateway")
 

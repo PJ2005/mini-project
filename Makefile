@@ -1,4 +1,4 @@
-BINARY   := edgemesh-gateway
+BINARY   := interlink-gateway
 PKG      := ./cmd/gateway
 PROTO    := proto/canonical.proto
 PB_OUT   := internal/canonical
@@ -13,7 +13,7 @@ run: build
 	./$(BINARY) -config $(CONFIG)
 
 proto:
-	protoc --go_out=$(PB_OUT) --go_opt=module=edgemesh/$(PB_OUT) --proto_path=. $(PROTO)
+	protoc --go_out=$(PB_OUT) --go_opt=module=interlink/$(PB_OUT) --proto_path=. $(PROTO)
 
 clean:
 	rm -f $(BINARY) *.db

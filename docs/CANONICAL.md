@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The canonical message model (`proto/canonical.proto`) is the single internal contract inside EdgeMesh. Every adapter converts its native format into a `Message` before publishing to the NATS bus. This decouples protocol-specific concerns from routing, policy evaluation, and storage.
+The canonical message model (`proto/canonical.proto`) is the single internal contract inside InterLink. Every adapter converts its native format into a `Message` before publishing to the NATS bus. This decouples protocol-specific concerns from routing, policy evaluation, and storage.
 
 The `Message` wrapper carries identity (`message_id`, `device_id`), timing (`timestamp_ms`), origin (`source_proto`), arbitrary key-value `metadata`, and exactly one typed payload via `oneof`:
 

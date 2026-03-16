@@ -1,4 +1,4 @@
-# EdgeMesh Gateway Configuration
+# InterLink Gateway Configuration
 
 nats:
   # NATS server URL. Use nats:// for plain, tls:// for encrypted connections.
@@ -11,7 +11,7 @@ mqtt:
   # MQTT broker address including port.
   broker: "tcp://127.0.0.1:1883"
   # Client ID must be unique per gateway instance to avoid session conflicts.
-  client_id: "edgemesh-gw-01"
+  client_id: "interlink-gw-01"
   # Topic filter for inbound device messages. '#' is a multi-level wildcard.
   topic: "devices/#"
   # Quality of Service: 0 = at most once, 1 = at least once, 2 = exactly once.
@@ -33,7 +33,7 @@ coap:
 
 registry:
   # SQLite database file path. Created automatically on first run.
-  db_path: "./edgemesh.db"
+  db_path: "./interlink.db"
 
 # Heartbeat timeout (Fix 1). Devices not seen within this duration are marked
 # inactive. Default: 5m. Checked every 60 seconds.

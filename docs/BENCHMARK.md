@@ -1,6 +1,6 @@
-# EdgeMesh vs Node-RED — Benchmark Guide
+# InterLink vs Node-RED — Benchmark Guide
 
-This guide walks you through running a fair, reproducible benchmark comparing **EdgeMesh** (Go) against **Node-RED** (Node.js) on the same Raspberry Pi 5.
+This guide walks you through running a fair, reproducible benchmark comparing **InterLink** (Go) against **Node-RED** (Node.js) on the same Raspberry Pi 5.
 
 ---
 
@@ -47,7 +47,7 @@ Node-RED now exposes:
 - `GET http://<RPI_IP>:1880/api/v1/devices/:id/latest` — latest message
 - `POST http://<RPI_IP>:1880/ingest/v1/:id/telemetry` — HTTP ingest
 
-And subscribes to `devices/#` on the local Mosquitto broker — same as EdgeMesh.
+And subscribes to `devices/#` on the local Mosquitto broker — same as InterLink.
 
 ### 1.5 Verify
 
@@ -67,7 +67,7 @@ curl http://localhost:1880/health
 On your development machine (or the RPi):
 
 ```bash
-cd edgemesh
+cd interlink
 go build -o loadtest ./tools/loadtest/
 ```
 
@@ -82,11 +82,11 @@ scp loadtest pi@<RPI_IP>:~/loadtest
 
 > **Important:** Run each test separately. Stop one system before starting the other. Reboot between tests for a clean state.
 
-### 3.1 Benchmark EdgeMesh
+### 3.1 Benchmark InterLink
 
 ```bash
-# 1. Make sure EdgeMesh is running
-./edgemesh-gateway -config config/config.yaml &
+# 1. Make sure InterLink is running
+./interlink-gateway -config config/config.yaml &
 
 # 2. Wait 10 seconds for it to stabilize
 sleep 10
@@ -118,7 +118,7 @@ Each run saves a JSON file like `benchmark_20260311_213000_1000msg.json`.
 ### 3.2 Benchmark Node-RED
 
 ```bash
-# 1. Stop EdgeMesh, reboot for clean state
+# 1. Stop InterLink, reboot for clean state
 sudo reboot
 
 # 2. After reboot, start infrastructure + Node-RED
@@ -159,7 +159,7 @@ While each test runs, capture these in a **separate terminal**:
 
 ```bash
 # Record CPU and memory every 1 second for 30 seconds
-pidstat -p $(pgrep -f edgemesh-gateway) 1 30 > edgemesh_cpu.txt
+pidstat -p $(pgrep -f interlink-gateway) 1 30 > interlink_cpu.txt
 # OR for Node-RED:
 pidstat -p $(pgrep -f node-red) 1 30 > nodered_cpu.txt
 ```
@@ -167,15 +167,15 @@ pidstat -p $(pgrep -f node-red) 1 30 > nodered_cpu.txt
 If `pidstat` is not available:
 ```bash
 # Simple alternative
-top -b -n 30 -d 1 -p $(pgrep -f edgemesh-gateway) > edgemesh_cpu.txt
+top -b -n 30 -d 1 -p $(pgrep -f interlink-gateway) > interlink_cpu.txt
 ```
 
 ### 4.2 Idle Memory Baseline
 
 Before running the load test, capture idle memory:
 ```bash
-# EdgeMesh idle
-curl -s http://127.0.0.1:8080/health | python3 -m json.tool > edgemesh_idle.json
+# InterLink idle
+curl -s http://127.0.0.1:8080/health | python3 -m json.tool > interlink_idle.json
 
 # Node-RED idle
 curl -s http://127.0.0.1:1880/health | python3 -m json.tool > nodered_idle.json
@@ -184,8 +184,8 @@ curl -s http://127.0.0.1:1880/health | python3 -m json.tool > nodered_idle.json
 ### 4.3 Binary / Install Size
 
 ```bash
-# EdgeMesh
-ls -lh edgemesh-gateway
+# InterLink
+ls -lh interlink-gateway
 # → ~25-30 MB single binary
 
 # Node-RED
@@ -198,8 +198,8 @@ npm list -g --depth=0 2>/dev/null | head -5
 ### 4.4 Cold Start Time
 
 ```bash
-# EdgeMesh
-time ./edgemesh-gateway -config config/config.yaml &
+# InterLink
+time ./interlink-gateway -config config/config.yaml &
 # → typically < 1 second
 
 # Node-RED
@@ -215,7 +215,7 @@ After all tests complete, fill in this table:
 
 ### 5.1 At a Glance
 
-| Metric | EdgeMesh | Node-RED |
+| Metric | InterLink | Node-RED |
 |---|---|---|
 | Language | Go 1.26 (compiled) | Node.js (V8 JIT) |
 | Binary size | __ MB | __ MB |
@@ -224,7 +224,7 @@ After all tests complete, fill in this table:
 
 ### 5.2 Idle State
 
-| Metric | EdgeMesh | Node-RED |
+| Metric | InterLink | Node-RED |
 |---|---|---|
 | RSS memory | __ MB | __ MB |
 | Heap allocated | __ MB | __ MB |
@@ -233,7 +233,7 @@ After all tests complete, fill in this table:
 
 ### 5.3 Load Test — 1,000 messages @ 100 msg/s
 
-| Metric | EdgeMesh | Node-RED |
+| Metric | InterLink | Node-RED |
 |---|---|---|
 | Throughput (actual) | __ msg/s | __ msg/s |
 | Latency p50 | __ ms | __ ms |
@@ -245,7 +245,7 @@ After all tests complete, fill in this table:
 
 ### 5.4 Stress Test — 5,000 messages @ 500 msg/s
 
-| Metric | EdgeMesh | Node-RED |
+| Metric | InterLink | Node-RED |
 |---|---|---|
 | Throughput (actual) | __ msg/s | __ msg/s |
 | Latency p50 | __ ms | __ ms |
@@ -256,7 +256,7 @@ After all tests complete, fill in this table:
 
 ### 5.5 Throughput Ceiling (unlimited rate)
 
-| Metric | EdgeMesh | Node-RED |
+| Metric | InterLink | Node-RED |
 |---|---|---|
 | Max throughput | __ msg/s | __ msg/s |
 | Latency p50 at max | __ ms | __ ms |
@@ -264,7 +264,7 @@ After all tests complete, fill in this table:
 
 ### 5.6 Feature Comparison
 
-| Feature | EdgeMesh | Node-RED |
+| Feature | InterLink | Node-RED |
 |---|---|---|
 | Protocol bridging (MQTT/HTTP/CoAP) | ✅ Built-in | ⚠️ Requires extra nodes |
 | Canonical data model (Protobuf) | ✅ | ❌ Raw JSON |
@@ -323,4 +323,4 @@ Each load test outputs a JSON file like:
 - **Run each test 3 times** and take the median for reliable results.
 - **Same hardware, same network** — both systems must run on the exact same RPi 5.
 - **Same message format** — the load test uses the same JSON payloads for both.
-- **Node-RED doesn't use NATS** — it processes messages in-process. This is fair because EdgeMesh's NATS overhead is part of its architecture, and the comparison shows what you get for that overhead (protocol bridging, policy, persistence).
+- **Node-RED doesn't use NATS** — it processes messages in-process. This is fair because InterLink's NATS overhead is part of its architecture, and the comparison shows what you get for that overhead (protocol bridging, policy, persistence).

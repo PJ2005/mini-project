@@ -16,10 +16,10 @@ import (
 	"github.com/plgd-dev/go-coap/v3/message/codes"
 	"github.com/plgd-dev/go-coap/v3/mux"
 
-	"edgemesh/internal/bus"
-	"edgemesh/internal/canonical"
-	"edgemesh/internal/metrics"
-	"edgemesh/internal/registry"
+	"interlink/internal/bus"
+	"interlink/internal/canonical"
+	"interlink/internal/metrics"
+	"interlink/internal/registry"
 )
 
 type Config struct {

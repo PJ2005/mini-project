@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package edgemesh;
+package interlink;
 
-option go_package = "edgemesh/internal/canonical";
+option go_package = "interlink/internal/canonical";
 
 message TelemetryPayload {
   string metric    = 1;

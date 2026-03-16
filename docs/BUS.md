@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`internal/bus/bus.go` abstracts the message bus behind a `MessageBus` interface so the rest of EdgeMesh never imports NATS directly. Adapters publish canonical messages; consumers subscribe by subject pattern.
+`internal/bus/bus.go` abstracts the message bus behind a `MessageBus` interface so the rest of InterLink never imports NATS directly. Adapters publish canonical messages; consumers subscribe by subject pattern.
 
 Subject pattern: **`iot.<type>.<device_id>`**
 
@@ -61,7 +61,7 @@ The standard NATS implementation in `bus.go`. Features:
 ### JetStreamBus (opt-in)
 
 The JetStream implementation in `jetstream.go`. Enabled via `nats.jetstream: true` in config. Features:
-- Creates/reuses `EDGEMESH` stream with subjects `iot.>`
+- Creates/reuses `INTERLINK` stream with subjects `iot.>`
 - Durable subscriptions for message replay
 - Offline subscribers can catch up on missed messages
 - Same `MessageBus` interface — transparent to adapters

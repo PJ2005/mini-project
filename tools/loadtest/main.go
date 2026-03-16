@@ -68,11 +68,11 @@ func main() {
 	flag.IntVar(&cfg.Messages, "messages", 1000, "Total messages to send")
 	flag.IntVar(&cfg.Rate, "rate", 100, "Messages per second (0 = unlimited)")
 	flag.IntVar(&cfg.Concurrency, "concurrency", 4, "Number of concurrent publishers")
-	flag.StringVar(&cfg.HealthURL, "health", "http://127.0.0.1:8080/health", "EdgeMesh /health URL (empty to skip)")
+	flag.StringVar(&cfg.HealthURL, "health", "http://127.0.0.1:8080/health", "InterLink /health URL (empty to skip)")
 	flag.IntVar(&cfg.WarmupSec, "warmup", 2, "Seconds to wait after connect before starting")
 	flag.Parse()
 
-	fmt.Printf("EdgeMesh Load Test\n")
+	fmt.Printf("InterLink Load Test\n")
 	fmt.Printf("  Broker:      %s\n", cfg.Broker)
 	fmt.Printf("  Messages:    %d\n", cfg.Messages)
 	fmt.Printf("  Rate:        %d msg/s\n", cfg.Rate)

@@ -7,8 +7,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"edgemesh/internal/metrics"
-	"edgemesh/internal/registry"
+	"interlink/internal/metrics"
+	"interlink/internal/registry"
 )
 
 type Handler func(subject string, data []byte)

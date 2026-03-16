@@ -3,8 +3,8 @@ package adapter
 import (
 	"context"
 
-	"edgemesh/internal/bus"
-	"edgemesh/internal/registry"
+	"interlink/internal/bus"
+	"interlink/internal/registry"
 )
 
 type Adapter interface {

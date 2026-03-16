@@ -15,11 +15,11 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"edgemesh/internal/bus"
-	"edgemesh/internal/canonical"
-	"edgemesh/internal/metrics"
-	"edgemesh/internal/policy"
-	"edgemesh/internal/registry"
+	"interlink/internal/bus"
+	"interlink/internal/canonical"
+	"interlink/internal/metrics"
+	"interlink/internal/policy"
+	"interlink/internal/registry"
 )
 
 type Config struct {

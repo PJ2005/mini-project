@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 
-	"edgemesh/internal/gateway"
+	"interlink/internal/gateway"
 )
 
 func main() {
