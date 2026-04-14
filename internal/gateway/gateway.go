@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -17,20 +18,21 @@ import (
 	adapthttp "interlink/internal/adapter/http"
 	adaptmqtt "interlink/internal/adapter/mqtt"
 	"interlink/internal/bus"
-	"interlink/internal/canonical"
 	"interlink/internal/metrics"
+	"interlink/internal/pipeline"
 	"interlink/internal/policy"
 	"interlink/internal/registry"
 )
 
 type Config struct {
-	NATS             NATSConfig       `yaml:"nats"`
-	MQTT             adaptmqtt.Config `yaml:"mqtt"`
-	HTTP             adapthttp.Config `yaml:"http"`
-	CoAP             adaptcoap.Config `yaml:"coap"`
-	Registry         RegistryConfig   `yaml:"registry"`
-	Policy           policy.Config    `yaml:"policy"`
-	HeartbeatTimeout Duration         `yaml:"heartbeat_timeout"`
+	NATS             NATSConfig                `yaml:"nats"`
+	MQTT             adaptmqtt.Config          `yaml:"mqtt"`
+	HTTP             adapthttp.Config          `yaml:"http"`
+	CoAP             adaptcoap.Config          `yaml:"coap"`
+	Registry         RegistryConfig            `yaml:"registry"`
+	Policy           policy.Config             `yaml:"policy"`
+	Pipelines        []pipeline.PipelineConfig `yaml:"pipelines"`
+	HeartbeatTimeout Duration                  `yaml:"heartbeat_timeout"`
 }
 
 type NATSConfig struct {
@@ -119,10 +121,16 @@ func Run(configPath string) error {
 	// Policy — Fix 4: provide bus reference for command routing.
 	engine := policy.New(cfg.Policy)
 	engine.SetBus(msgBus)
+	workerCount := cfg.Policy.WorkerCount
+	if workerCount <= 0 {
+		workerCount = runtime.NumCPU()
+	}
+	engine.StartWorkerPool(ctx, workerCount)
 	slog.Info("policy engine loaded",
 		"component", "gateway",
 		"rules", len(cfg.Policy.Rules),
-		"default_action", cfg.Policy.DefaultAction)
+		"default_action", cfg.Policy.DefaultAction,
+		"worker_count", workerCount)
 
 	// Fix 5: start policy hot-reload file watcher.
 	if err := engine.WatchConfig(ctx, configPath); err != nil {
@@ -131,13 +139,8 @@ func Run(configPath string) error {
 
 	// Wire policy as a NATS subscription interceptor.
 	_, err = msgBus.Subscribe("iot.>", func(subject string, data []byte) {
-		msg, mErr := canonical.UnmarshalMessage(data)
-		if mErr != nil {
-			slog.Error("unmarshal error", "component", "gateway", "subject", subject, "error", mErr)
-			return
-		}
-		if !engine.Evaluate(msg) {
-			return
+		if !engine.Submit(subject, data) {
+			metrics.PolicyDroppedTotal.Inc()
 		}
 	})
 	if err != nil {
@@ -164,6 +167,26 @@ func Run(configPath string) error {
 			return fmt.Errorf("start adapter %s: %w", a.Name(), err)
 		}
 		slog.Info("adapter started", "component", "gateway", "adapter", a.Name())
+	}
+
+	var pipelines []*pipeline.Pipeline
+	for _, pc := range cfg.Pipelines {
+		pl, err := pipeline.New(pc, msgBus, reg)
+		if err != nil {
+			slog.Error("pipeline init error",
+				"component", "gateway",
+				"pipeline", pc.Name,
+				"error", err)
+			continue
+		}
+		if err := pl.Start(ctx); err != nil {
+			slog.Error("pipeline start error",
+				"component", "gateway",
+				"pipeline", pc.Name,
+				"error", err)
+			continue
+		}
+		pipelines = append(pipelines, pl)
 	}
 
 	// Start metrics background collectors.
@@ -202,6 +225,10 @@ func Run(configPath string) error {
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5_000_000_000) // 5s
 	defer shutdownCancel()
+
+	for _, p := range pipelines {
+		p.Stop(shutdownCtx)
+	}
 
 	for _, a := range adapters {
 		if err := a.Stop(shutdownCtx); err != nil {

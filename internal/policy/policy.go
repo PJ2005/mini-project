@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ type Rule struct {
 
 type Config struct {
 	DefaultAction string `yaml:"default_action"`
+	WorkerCount   int    `yaml:"worker_count"`
 	Rules         []Rule `yaml:"rules"`
 }
 
@@ -53,7 +55,13 @@ type Engine struct {
 	rules         []Rule
 	defaultAction string
 	msgBus        bus.MessageBus
+	submitCh      chan policyWorkItem
 	Stats         Counters
+}
+
+type policyWorkItem struct {
+	subject string
+	data    []byte
 }
 
 func New(cfg Config) *Engine {
@@ -69,6 +77,73 @@ func New(cfg Config) *Engine {
 
 func (e *Engine) SetBus(b bus.MessageBus) {
 	e.msgBus = b
+}
+
+func (e *Engine) StartWorkerPool(ctx context.Context, workerCount int) {
+	if workerCount <= 0 {
+		workerCount = runtime.NumCPU()
+	}
+	if e.submitCh == nil {
+		e.submitCh = make(chan policyWorkItem, 2048)
+	}
+	for i := 0; i < workerCount; i++ {
+		go e.policyWorker(ctx)
+	}
+	slog.Info("policy worker pool started",
+		"component", "policy",
+		"workers", workerCount,
+		"queue_capacity", cap(e.submitCh))
+}
+
+func (e *Engine) Submit(subject string, data []byte) bool {
+	if e.submitCh == nil {
+		slog.Warn("policy: worker pool not started",
+			"component", "policy",
+			"subject", subject)
+		return false
+	}
+	item := policyWorkItem{subject: subject, data: append([]byte(nil), data...)}
+	select {
+	case e.submitCh <- item:
+		return true
+	default:
+		slog.Warn("policy: ingestion buffer full, dropping message",
+			"component", "policy",
+			"subject", subject)
+		return false
+	}
+}
+
+func (e *Engine) policyWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case item := <-e.submitCh:
+			e.processWorkItem(item)
+		}
+	}
+}
+
+func (e *Engine) processWorkItem(item policyWorkItem) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in policy worker",
+				"component", "policy",
+				"subject", item.subject,
+				"error", fmt.Sprintf("%v", r))
+		}
+	}()
+
+	msg, err := canonical.UnmarshalMessage(item.data)
+	if err != nil {
+		slog.Error("policy unmarshal error",
+			"component", "policy",
+			"subject", item.subject,
+			"error", err)
+		return
+	}
+	e.Evaluate(msg)
 }
 
 func (e *Engine) Evaluate(msg *canonical.Message) bool {
@@ -131,7 +206,7 @@ func (e *Engine) triggerCommand(r Rule, srcMsg *canonical.Message) {
 		"triggered_by": srcMsg.GetDeviceId(),
 	})
 	cmd := canonical.NewCommandMessage(r.CommandTarget, "policy", r.CommandAction, params)
-	data, err := canonical.Marshal(cmd)
+	data, err := canonical.MarshalPooled(cmd)
 	if err != nil {
 		slog.Error("command marshal error", "component", "policy", "error", err)
 		return

@@ -100,7 +100,7 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 
 	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "coap", payload.Metric, payload.Value, payload.Unit)
-	data, err := canonical.Marshal(msg)
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		setResponse(w, codes.InternalServerError, "marshal failed")
 		return
@@ -158,7 +158,7 @@ func (a *Adapter) handleEvent(w mux.ResponseWriter, req *mux.Message) {
 	}
 
 	msg := canonical.NewEventMessage(deviceID, "coap", payload.EventType, payload.Severity, payload.Detail)
-	data, err := canonical.Marshal(msg)
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		setResponse(w, codes.InternalServerError, "marshal failed")
 		return

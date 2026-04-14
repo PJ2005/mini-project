@@ -57,10 +57,20 @@ var (
 		Help: "Policy allow/deny decision counts",
 	}, []string{"action"})
 
+	PolicyDroppedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "interlink_policy_dropped_total",
+		Help: "Number of policy messages dropped before worker processing",
+	})
+
 	// SSE
 	SSEClientsActive = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "interlink_sse_clients_active",
 		Help: "Number of active SSE streaming clients",
+	})
+
+	SSEDroppedMessagesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "interlink_sse_dropped_messages_total",
+		Help: "Number of SSE messages dropped for slow consumers",
 	})
 
 	// Registry
@@ -186,8 +196,10 @@ func Init() {
 		PolicyEvalDuration,
 		// Policy
 		PolicyDecisions,
+		PolicyDroppedTotal,
 		// SSE
 		SSEClientsActive,
+		SSEDroppedMessagesTotal,
 		// Registry
 		RegistryDevices,
 		// Storage

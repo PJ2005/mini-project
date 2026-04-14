@@ -38,7 +38,7 @@ type Adapter struct {
 	adapterNames []string
 	startTime    time.Time
 
-	ssesMu     sync.Mutex
+	ssesMu     sync.RWMutex
 	sseClients map[string][]chan []byte
 
 	sseClientCount atomic.Int64
@@ -59,7 +59,7 @@ func New(cfg Config) *Adapter {
 
 func (a *Adapter) Name() string { return "http" }
 
-func (a *Adapter) SetAdapterNames(names []string) { a.adapterNames = names }
+func (a *Adapter) SetAdapterNames(names []string)   { a.adapterNames = names }
 func (a *Adapter) SetPolicyEngine(e *policy.Engine) { a.engine = e }
 
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
@@ -87,7 +87,7 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 		if err := reg.UpsertLatestMessage(deviceID, data); err != nil {
 			slog.Error("upsert latest message", "component", "http", "device_id", deviceID, "error", err)
 		}
-		a.fanoutSSE(deviceID, data)
+		a.broadcastToSSEClients(deviceID, data)
 	})
 	if err != nil {
 		return fmt.Errorf("http subscribe iot.telemetry.>: %w", err)
@@ -194,7 +194,7 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 
 	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "http", req.Metric, req.Value, req.Unit)
-	data, err := canonical.Marshal(msg)
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		gohttp.Error(w, `{"error":"marshal failed"}`, gohttp.StatusInternalServerError)
 		return
@@ -306,23 +306,18 @@ func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
 	metrics.SSEClientsActive.Set(float64(a.sseClientCount.Load()))
 }
 
-func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
-	a.ssesMu.Lock()
-	defer a.ssesMu.Unlock()
-	for _, ch := range a.sseClients[deviceID] {
+func (a *Adapter) broadcastToSSEClients(deviceID string, data []byte) {
+	a.ssesMu.RLock()
+	clients := append([]chan []byte(nil), a.sseClients[deviceID]...)
+	a.ssesMu.RUnlock()
+
+	for _, ch := range clients {
 		select {
 		case ch <- data:
 		default:
-			slog.Warn("SSE channel full, dropping oldest message",
+			slog.Warn("sse: slow consumer, dropping message",
 				"component", "http", "device_id", deviceID)
-			select {
-			case <-ch:
-			default:
-			}
-			select {
-			case ch <- data:
-			default:
-			}
+			metrics.SSEDroppedMessagesTotal.Inc()
 		}
 	}
 }
@@ -348,7 +343,7 @@ func (a *Adapter) handleCommand(w gohttp.ResponseWriter, r *gohttp.Request) {
 	}
 
 	msg := canonical.NewCommandMessage(deviceID, "http", req.Action, req.Params)
-	data, err := canonical.Marshal(msg)
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		gohttp.Error(w, `{"error":"marshal failed"}`, gohttp.StatusInternalServerError)
 		return

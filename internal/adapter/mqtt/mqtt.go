@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
@@ -32,6 +33,15 @@ type Adapter struct {
 	reg    *registry.Registry
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
+
+	msgMu           sync.RWMutex
+	msgChan         chan mqttMsg
+	droppedMessages atomic.Int64
+}
+
+type mqttMsg struct {
+	deviceID string
+	raw      []byte
 }
 
 func New(cfg Config) *Adapter {
@@ -44,6 +54,9 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	a.bus = b
 	a.reg = reg
 	ctx, a.cancel = context.WithCancel(ctx)
+	a.msgMu.Lock()
+	a.msgChan = make(chan mqttMsg, 1024)
+	a.msgMu.Unlock()
 
 	opts := pahomqtt.NewClientOptions().
 		AddBroker(a.cfg.Broker).
@@ -72,7 +85,7 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		<-ctx.Done()
+		a.runMessagePump()
 	}()
 
 	slog.Info("adapter started",
@@ -89,13 +102,19 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	if a.client != nil && a.client.IsConnected() {
 		a.client.Disconnect(250)
 	}
+	a.msgMu.Lock()
+	ch := a.msgChan
+	a.msgChan = nil
+	a.msgMu.Unlock()
+	if ch != nil {
+		close(ch)
+	}
 	a.wg.Wait()
 	slog.Info("adapter stopped", "component", "mqtt")
 	return nil
 }
 
 func (a *Adapter) onMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
-	totalStart := time.Now()
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic recovered in message handler", "component", "mqtt", "error", fmt.Sprintf("%v", r))
@@ -109,43 +128,84 @@ func (a *Adapter) onMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
 		return
 	}
 
+	a.msgMu.RLock()
+	ch := a.msgChan
+	if ch == nil {
+		a.msgMu.RUnlock()
+		return
+	}
+	select {
+	case ch <- mqttMsg{deviceID: deviceID, raw: append([]byte(nil), msg.Payload()...)}:
+		a.msgMu.RUnlock()
+	default:
+		dropped := a.droppedMessages.Add(1)
+		a.msgMu.RUnlock()
+		slog.Warn("mqtt: ingestion buffer full, dropping message",
+			"component", "mqtt",
+			"device_id", deviceID,
+			"dropped_messages", dropped)
+	}
+}
+
+func (a *Adapter) runMessagePump() {
+	a.msgMu.RLock()
+	ch := a.msgChan
+	a.msgMu.RUnlock()
+	if ch == nil {
+		return
+	}
+
+	for msg := range ch {
+		a.processMessage(msg)
+	}
+}
+
+func (a *Adapter) processMessage(msg mqttMsg) {
+	totalStart := time.Now()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in MQTT worker", "component", "mqtt", "error", fmt.Sprintf("%v", r))
+		}
+		metrics.MessageProcessingDuration.WithLabelValues("mqtt", "total").Observe(time.Since(totalStart).Seconds())
+	}()
+
 	convertStart := time.Now()
-	m, err := a.convertPayload(deviceID, msg.Payload())
+	m, err := a.convertPayload(msg.deviceID, msg.raw)
 	if err != nil {
-		slog.Warn("convert error", "component", "mqtt", "device_id", deviceID, "error", err)
+		slog.Warn("convert error", "component", "mqtt", "device_id", msg.deviceID, "error", err)
 		return
 	}
 	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "convert").Observe(time.Since(convertStart).Seconds())
 
 	marshalStart := time.Now()
-	data, err := canonical.Marshal(m)
+	data, err := canonical.MarshalPooled(m)
 	if err != nil {
-		slog.Error("marshal error", "component", "mqtt", "device_id", deviceID, "error", err)
+		slog.Error("marshal error", "component", "mqtt", "device_id", msg.deviceID, "error", err)
 		return
 	}
 	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "marshal").Observe(time.Since(marshalStart).Seconds())
 
 	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(m), data); err != nil {
-		slog.Error("publish error", "component", "mqtt", "device_id", deviceID, "error", err)
+		slog.Error("publish error", "component", "mqtt", "device_id", msg.deviceID, "error", err)
 		return
 	}
 	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "publish").Observe(time.Since(publishStart).Seconds())
 	metrics.RecordPublish("mqtt")
 
-	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "total").Observe(time.Since(totalStart).Seconds())
-
-	a.reg.Register(registry.Device{
-		DeviceID: deviceID,
-		Name:     deviceID,
+	if err := a.reg.Register(registry.Device{
+		DeviceID: msg.deviceID,
+		Name:     msg.deviceID,
 		Protocol: "mqtt",
 		Status:   "active",
-	})
+	}); err != nil {
+		slog.Error("registry upsert error", "component", "mqtt", "device_id", msg.deviceID, "error", err)
+		return
+	}
 
 	slog.Info("telemetry received",
 		"component", "mqtt",
-		"device_id", deviceID,
-		"topic", msg.Topic(),
+		"device_id", msg.deviceID,
 		"latency_ms", time.Since(totalStart).Milliseconds())
 }
 
