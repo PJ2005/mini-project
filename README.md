@@ -128,19 +128,36 @@ Key subject convention:
 
 ## Performance Snapshot (InterLink vs Node-RED)
 
-The table below is based on recorded load test runs in this repository (`comp.txt`) at equal message counts and rates.
+The table below is based on recorded runs in `comp.txt` with identical message counts and producer settings.
 
-| Scenario | System | Throughput (msg/s) | p50 (ms) | p95 (ms) | p99 (ms) | Errors |
-|---|---|---:|---:|---:|---:|---:|
-| 1000 msgs @ 100/s | InterLink | 98.48 | 0.346 | 1.075 | 1.603 | 0 |
-| 1000 msgs @ 100/s | Node-RED | 98.53 | 0.287 | 0.762 | 0.979 | 0 |
-| 5000 msgs @ 500/s | InterLink | 465.38 | 0.209 | 0.985 | 1.729 | 0 |
+| Test Scenario | System | Messages | Target Rate (msg/s) | Actual Throughput (msg/s) | Duration (s) | Latency Min (ms) | Latency Max (ms) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Controlled load | InterLink | 1000 | 100 | 98.48 | 10.15 | 0.067 | 2.778 |
+| Controlled load | Node-RED | 1000 | 100 | 98.53 | 10.15 | 0.106 | 1.682 |
+| Medium load | InterLink | 5000 | 500 | 465.38 | 10.74 | 0.042 | 3.637 |
+| Medium load | Node-RED | 5000 | 500 | 465.78 | 10.73 | 0.048 | 4.165 |
+| Unlimited rate (ceiling) | InterLink | 5000 | 0 (unlimited) | 24497.18 | 0.20 | 0.023 | 5.301 |
+| Unlimited rate (ceiling) | Node-RED | 5000 | 0 (unlimited) | 26339.34 | 0.19 | 0.024 | 4.282 |
 
-Interpretation:
-- At moderate load (100/s), both systems sustain the target rate with zero errors.
-- At higher load (500/s), InterLink remains stable with sub-2ms p99 publish latency and zero drops in the recorded run.
-- InterLink health snapshots during load show low memory footprint and consistent goroutine counts, which supports edge deployment goals.
-- The current repository data includes one 5000@500 Node-RED run transcript without a complete JSON block in the captured snippet, so that row is intentionally not extrapolated.
+### Derived Delta (InterLink - Node-RED)
+
+| Scenario | Throughput Delta (msg/s) | Throughput Delta (%) | Duration Delta (s) | Min Latency Delta (ms) | Max Latency Delta (ms) |
+|---|---:|---:|---:|---:|---:|
+| 1000 @ 100/s | -0.05 | -0.05% | 0.00 | -0.039 | +1.096 |
+| 5000 @ 500/s | -0.40 | -0.09% | +0.01 | -0.006 | -0.528 |
+| 5000 @ unlimited | -1842.16 | -6.99% | +0.01 | -0.001 | +1.019 |
+
+Negative latency delta means InterLink has lower latency for that metric.
+
+## Node-RED Comparison
+
+Numerical deployment and footprint comparison from this local environment:
+
+| Field | InterLink | Node-RED | Delta |
+|---|---:|---:|---:|
+| Deployable artifact size (bytes) | 19802112 | 79790181 | InterLink is 59988069 bytes smaller |
+| Size ratio | 1.00x | 4.03x | Node-RED package is 4.03x larger |
+| Runtime dependency count | 0 external runtimes | 1 required runtime (Node.js v24.14.0) | InterLink avoids runtime dependency |
 
 ## Extending Adapters
 
