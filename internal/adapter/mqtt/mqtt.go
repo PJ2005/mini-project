@@ -53,7 +53,7 @@ func (a *Adapter) Name() string { return "mqtt" }
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
 	a.bus = b
 	a.reg = reg
-	ctx, a.cancel = context.WithCancel(ctx)
+	_, a.cancel = context.WithCancel(ctx)
 	a.msgMu.Lock()
 	a.msgChan = make(chan mqttMsg, 1024)
 	a.msgMu.Unlock()

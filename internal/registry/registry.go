@@ -225,6 +225,29 @@ func (r *Registry) GetByProtocol(protocol string) ([]Device, error) {
 	return devices, rows.Err()
 }
 
+// ListDevices returns all devices ordered by last_seen descending.
+func (r *Registry) ListDevices() ([]Device, error) {
+	rows, err := r.db.Query(
+		`SELECT device_id, name, protocol, status, metadata, created_at, last_seen
+		 FROM devices
+		 ORDER BY last_seen DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list devices: %w", err)
+	}
+	defer rows.Close()
+
+	devices := make([]Device, 0)
+	for rows.Next() {
+		d, err := scanDeviceRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		devices = append(devices, *d)
+	}
+	return devices, rows.Err()
+}
+
 func (r *Registry) UpdateStatus(deviceID, status string) error {
 	res, err := r.db.Exec(`UPDATE devices SET status = ? WHERE device_id = ?`, status, deviceID)
 	if err != nil {

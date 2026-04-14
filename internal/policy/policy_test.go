@@ -2,6 +2,8 @@ package policy
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -97,5 +99,64 @@ func TestStartWorkerPoolProcessesSubmittedMessage(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for policy worker publish")
+	}
+}
+
+func TestEvaluateAllowAndDeny(t *testing.T) {
+	allow := New(Config{
+		DefaultAction: "deny",
+		Rules: []Rule{{
+			DevicePattern: "sensor-*",
+			SourceProto:   "mqtt",
+			MessageType:   "telemetry",
+			Action:        "allow",
+		}},
+	})
+	if ok := allow.Evaluate(canonical.NewTelemetryMessage("sensor-1", "mqtt", "temp", 10, "C")); !ok {
+		t.Fatal("expected allow rule to pass")
+	}
+
+	deny := New(Config{
+		DefaultAction: "allow",
+		Rules: []Rule{{
+			DevicePattern: "sensor-*",
+			SourceProto:   "mqtt",
+			MessageType:   "telemetry",
+			Action:        "deny",
+		}},
+	})
+	if ok := deny.Evaluate(canonical.NewTelemetryMessage("sensor-1", "mqtt", "temp", 10, "C")); ok {
+		t.Fatal("expected deny rule to block")
+	}
+}
+
+func TestSubmitWithoutAndWithFullBuffer(t *testing.T) {
+	e := New(Config{DefaultAction: "allow"})
+	if ok := e.Submit("iot.telemetry.dev", []byte("x")); ok {
+		t.Fatal("expected submit to fail when worker pool is not started")
+	}
+
+	e.submitCh = make(chan policyWorkItem, 1)
+	e.submitCh <- policyWorkItem{subject: "full", data: []byte("x")}
+	if ok := e.Submit("iot.telemetry.dev", []byte("y")); ok {
+		t.Fatal("expected submit to fail on full buffer")
+	}
+}
+
+func TestReloadUpdatesRules(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := []byte("policy:\n  default_action: deny\n  rules:\n    - device_pattern: \"sensor-*\"\n      source_proto: \"mqtt\"\n      message_type: \"telemetry\"\n      action: allow\n")
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	e := New(Config{DefaultAction: "allow"})
+	e.reload(path)
+
+	if ok := e.Evaluate(canonical.NewTelemetryMessage("sensor-9", "mqtt", "temp", 10, "C")); !ok {
+		t.Fatal("expected reloaded allow rule to pass")
+	}
+	if ok := e.Evaluate(canonical.NewTelemetryMessage("other", "mqtt", "temp", 10, "C")); ok {
+		t.Fatal("expected default deny after reload")
 	}
 }

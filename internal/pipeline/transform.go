@@ -1,5 +1,7 @@
 package pipeline
 
+import "log/slog"
+
 type Record map[string]float64
 
 func RunTransform(t TransformConfig, r Record) (Record, bool) {
@@ -52,6 +54,23 @@ func RunTransform(t TransformConfig, r Record) (Record, bool) {
 			return r, false
 		}
 		return r, true
+
+	case "script":
+		compiled, err := CompileScript(t.Script)
+		if err != nil {
+			slog.Error("pipeline script compile failed",
+				"component", "pipeline",
+				"error", err)
+			return r, false
+		}
+		out, err := RunScript(compiled, r)
+		if err != nil {
+			slog.Error("pipeline script run failed",
+				"component", "pipeline",
+				"error", err)
+			return r, false
+		}
+		return out, true
 
 	default:
 		return r, false

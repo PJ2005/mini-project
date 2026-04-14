@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"interlink/internal/bus"
@@ -27,6 +28,19 @@ type Pipeline struct {
 	cancel   context.CancelFunc
 	wg       sync.WaitGroup
 	stopOnce sync.Once
+
+	messagesProcessed atomic.Int64
+	errorsTotal       atomic.Int64
+	lastMessageAt     atomic.Int64
+}
+
+type Stats struct {
+	Name              string `json:"name"`
+	SourceType        string `json:"source_type"`
+	SinkType          string `json:"sink_type"`
+	MessagesProcessed int64  `json:"messages_processed"`
+	LastMessageAt     int64  `json:"last_message_at"`
+	ErrorCount        int64  `json:"error_count"`
 }
 
 type sourceMessage struct {
@@ -46,6 +60,15 @@ func New(cfg PipelineConfig, b bus.MessageBus, reg *registry.Registry) (*Pipelin
 
 	if err := validateSink(cfg.Sink); err != nil {
 		return nil, err
+	}
+
+	for _, tf := range cfg.Transforms {
+		if tf.Type != "script" {
+			continue
+		}
+		if _, err := CompileScript(tf.Script); err != nil {
+			return nil, fmt.Errorf("pipeline %s script compile error (script=%q): %w", cfg.Name, tf.Script, err)
+		}
 	}
 
 	timeout := cfg.Sink.Timeout
@@ -135,8 +158,12 @@ func (p *Pipeline) run(ctx context.Context) {
 }
 
 func (p *Pipeline) handleMessage(msg sourceMessage) {
+	p.messagesProcessed.Add(1)
+	p.lastMessageAt.Store(time.Now().UnixMilli())
+
 	canon, err := canonical.UnmarshalMessage(msg.data)
 	if err != nil {
+		p.errorsTotal.Add(1)
 		slog.Error("pipeline unmarshal failed",
 			"component", "pipeline",
 			"pipeline", p.cfg.Name,
@@ -162,11 +189,23 @@ func (p *Pipeline) handleMessage(msg sourceMessage) {
 	}
 
 	if err := p.dispatch(canon.GetDeviceId(), metric, value, tel.GetUnit()); err != nil {
+		p.errorsTotal.Add(1)
 		slog.Error("pipeline dispatch failed",
 			"component", "pipeline",
 			"pipeline", p.cfg.Name,
 			"sink", p.cfg.Sink.Type,
 			"error", err)
+	}
+}
+
+func (p *Pipeline) Stats() Stats {
+	return Stats{
+		Name:              p.cfg.Name,
+		SourceType:        p.cfg.Source.Type,
+		SinkType:          p.cfg.Sink.Type,
+		MessagesProcessed: p.messagesProcessed.Load(),
+		LastMessageAt:     p.lastMessageAt.Load(),
+		ErrorCount:        p.errorsTotal.Load(),
 	}
 }
 

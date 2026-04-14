@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"interlink/internal/pipeline"
 	"interlink/internal/policy"
 	"interlink/internal/registry"
+	"interlink/internal/ui"
 )
 
 type Config struct {
@@ -32,7 +34,12 @@ type Config struct {
 	Registry         RegistryConfig            `yaml:"registry"`
 	Policy           policy.Config             `yaml:"policy"`
 	Pipelines        []pipeline.PipelineConfig `yaml:"pipelines"`
+	UI               UIConfig                  `yaml:"ui"`
 	HeartbeatTimeout Duration                  `yaml:"heartbeat_timeout"`
+}
+
+type UIConfig struct {
+	Listen string `yaml:"listen"`
 }
 
 type NATSConfig struct {
@@ -65,9 +72,18 @@ func Run(configPath string) error {
 	if err != nil {
 		return err
 	}
+	if cfg.UI.Listen == "" {
+		cfg.UI.Listen = ":8081"
+	}
 
 	// Fix 16: validate config before establishing any connections.
 	if errs := validateConfig(cfg); len(errs) > 0 {
+		if cfg.UI.Listen == cfg.HTTP.Listen {
+			slog.Error("fatal config error: ui.listen must differ from http.listen",
+				"component", "gateway",
+				"ui_listen", cfg.UI.Listen,
+				"http_listen", cfg.HTTP.Listen)
+		}
 		fmt.Fprintln(os.Stderr, "Configuration validation failed:")
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  • %s\n", e)
@@ -121,16 +137,12 @@ func Run(configPath string) error {
 	// Policy — Fix 4: provide bus reference for command routing.
 	engine := policy.New(cfg.Policy)
 	engine.SetBus(msgBus)
-	workerCount := cfg.Policy.WorkerCount
-	if workerCount <= 0 {
-		workerCount = runtime.NumCPU()
-	}
-	engine.StartWorkerPool(ctx, workerCount)
+	engine.StartWorkerPool(ctx, cfg.Policy.WorkerCount)
 	slog.Info("policy engine loaded",
 		"component", "gateway",
 		"rules", len(cfg.Policy.Rules),
 		"default_action", cfg.Policy.DefaultAction,
-		"worker_count", workerCount)
+		"worker_count", cfg.Policy.WorkerCount)
 
 	// Fix 5: start policy hot-reload file watcher.
 	if err := engine.WatchConfig(ctx, configPath); err != nil {
@@ -189,6 +201,17 @@ func Run(configPath string) error {
 		pipelines = append(pipelines, pl)
 	}
 
+	uiServer := ui.New(pipelines, reg)
+	uiHTTP := &http.Server{Addr: cfg.UI.Listen, Handler: uiServer.Handler()}
+	go func() {
+		slog.Info("InterLink UI available at http://localhost:8081",
+			"component", "gateway",
+			"listen", cfg.UI.Listen)
+		if err := uiHTTP.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("ui server error", "component", "gateway", "error", err)
+		}
+	}()
+
 	// Start metrics background collectors.
 	metrics.StartCollector(ctx, reg, 10*time.Second)
 	httpAdapter.StartGaugeRefresh(ctx)
@@ -229,6 +252,12 @@ func Run(configPath string) error {
 	for _, p := range pipelines {
 		p.Stop(shutdownCtx)
 	}
+
+	uiShutdownCtx, uiShutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	if err := uiHTTP.Shutdown(uiShutdownCtx); err != nil {
+		slog.Error("ui shutdown error", "component", "gateway", "error", err)
+	}
+	uiShutdownCancel()
 
 	for _, a := range adapters {
 		if err := a.Stop(shutdownCtx); err != nil {
@@ -278,6 +307,12 @@ func validateConfig(cfg *Config) []string {
 	if cfg.CoAP.Listen == "" {
 		errs = append(errs, "coap.listen is required and must be non-empty")
 	}
+	if cfg.UI.Listen == "" {
+		errs = append(errs, "ui.listen is required and must be non-empty")
+	}
+	if cfg.UI.Listen == cfg.HTTP.Listen {
+		errs = append(errs, fmt.Sprintf("ui.listen %q must differ from http.listen %q", cfg.UI.Listen, cfg.HTTP.Listen))
+	}
 
 	validActions := map[string]bool{"allow": true, "deny": true}
 	if cfg.Policy.DefaultAction != "" && !validActions[cfg.Policy.DefaultAction] {
@@ -287,6 +322,23 @@ func validateConfig(cfg *Config) []string {
 		action := strings.ToLower(rule.Action)
 		if !validActions[action] {
 			errs = append(errs, fmt.Sprintf("policy.rules[%d].action %q must be 'allow' or 'deny'", i, rule.Action))
+		}
+	}
+	if cfg.Policy.WorkerCount < 1 {
+		errs = append(errs, fmt.Sprintf("policy.worker_count %d must be >= 1", cfg.Policy.WorkerCount))
+	}
+
+	for i, pl := range cfg.Pipelines {
+		if pl.Sink.Type != "http_post" {
+			continue
+		}
+		if pl.Sink.URL == "" {
+			errs = append(errs, fmt.Sprintf("pipelines[%d] (%s): http_post sink requires non-empty url", i, pl.Name))
+			continue
+		}
+		u, err := url.Parse(pl.Sink.URL)
+		if err != nil || u == nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Sprintf("pipelines[%d] (%s): http_post sink url %q must be a valid http/https URL", i, pl.Name, pl.Sink.URL))
 		}
 	}
 

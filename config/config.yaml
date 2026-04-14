@@ -31,6 +31,10 @@ coap:
   # Listen address for the CoAP adapter (UDP, RFC 7252). Standard port is 5683.
   listen: ":5683"
 
+ui:
+  # Read-only web UI listen address.
+  listen: ":8081"
+
 registry:
   # SQLite database file path. Created automatically on first run.
   db_path: "./interlink.db"
@@ -42,8 +46,8 @@ heartbeat_timeout: "5m"
 policy:
   # Default action when no rule matches: "allow" or "deny".
   default_action: "allow"
-  # Worker count for the policy evaluation pool. Set to 0 to use NumCPU().
-  worker_count: 0
+  # Worker count for the policy evaluation pool. Must be >= 1.
+  worker_count: 1
   # Rules evaluated top-to-bottom, first match wins.
   rules:
     - device_pattern: "*"
@@ -67,57 +71,61 @@ policy:
     #   command_target: "actuator-01"
     #   command_action: "adjust"
 
-  # Pipeline DSL (Phase 3).
-  # Users can define source -> transform chain -> sink flows without writing Go code.
-  # pipelines:
-  #   - name: temperature-bridge-http
-  #     source:
-  #       type: nats
-  #       subject: iot.telemetry.>
-  #     transforms:
-  #       - type: extract
-  #         field: temperature
-  #         as: value
-  #       - type: scale
-  #         factor: 1.8
-  #         offset: 32
-  #         as: temp_f
-  #       - type: rename
-  #         from: temp_f
-  #         to: value
-  #       - type: filter
-  #         field: value
-  #         min: -100
-  #         max: 250
-  #     sink:
-  #       type: http_post
-  #       url: http://dashboard.local/ingest
-  #       timeout: 3s
-  #
-  #   - name: temperature-bridge-nats
-  #     source:
-  #       type: nats
-  #       subject: iot.telemetry.>
-  #     transforms:
-  #       - type: extract
-  #         field: temperature
-  #         as: value
-  #       - type: scale
-  #         factor: 1.8
-  #         offset: 32
-  #         as: value
-  #     sink:
-  #       type: nats_publish
-  #       subject: pipelines.temperature.out
-  #
-  #   - name: temperature-bridge-mqtt
-  #     source:
-  #       type: nats
-  #       subject: iot.telemetry.>
-  #     transforms:
-  #       - type: extract
-  #         field: temperature
-  #         as: value
-  #     sink:
-  #       type: mqtt_publish
-  #       topic: pipelines/temperature/out
+# Pipeline DSL (Phase 3).
+# Users can define source -> transform chain -> sink flows without writing Go code.
+# pipelines:
+#   - name: temperature-bridge-http
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#       - type: scale
+#         factor: 1.8
+#         offset: 32
+#         as: temp_f
+#       - type: rename
+#         from: temp_f
+#         to: value
+#       - type: filter
+#         field: value
+#         min: -100
+#         max: 250
+#       - type: script
+#         script: |
+#           value = value * 1.8 + 32
+#           if value > 200 { value = 200 }
+#     sink:
+#       type: http_post
+#       url: http://dashboard.local/ingest
+#       timeout: 3s
+#
+#   - name: temperature-bridge-nats
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#       - type: scale
+#         factor: 1.8
+#         offset: 32
+#         as: value
+#     sink:
+#       type: nats_publish
+#       subject: pipelines.temperature.out
+#
+#   - name: temperature-bridge-mqtt
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#     sink:
+#       type: mqtt_publish
+#       topic: pipelines/temperature/out

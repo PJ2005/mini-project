@@ -22,6 +22,7 @@ type TransformConfig struct {
 	As     string  `yaml:"as"`
 	From   string  `yaml:"from"`
 	To     string  `yaml:"to"`
+	Script string  `yaml:"script"`
 	Factor float64 `yaml:"factor"`
 	Offset float64 `yaml:"offset"`
 	Min    float64 `yaml:"min"`
