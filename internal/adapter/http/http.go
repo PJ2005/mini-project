@@ -38,7 +38,7 @@ type Adapter struct {
 	adapterNames []string
 	startTime    time.Time
 
-	ssesMu     sync.Mutex
+	ssesMu     sync.RWMutex
 	sseClients map[string][]chan []byte
 
 	sseClientCount atomic.Int64
@@ -59,7 +59,7 @@ func New(cfg Config) *Adapter {
 
 func (a *Adapter) Name() string { return "http" }
 
-func (a *Adapter) SetAdapterNames(names []string) { a.adapterNames = names }
+func (a *Adapter) SetAdapterNames(names []string)   { a.adapterNames = names }
 func (a *Adapter) SetPolicyEngine(e *policy.Engine) { a.engine = e }
 
 func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Registry) error {
@@ -71,6 +71,7 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 	mux.HandleFunc("POST /ingest/v1/{device_id}/telemetry", a.handleIngest)
 	mux.HandleFunc("GET /api/v1/devices/{device_id}/latest", a.handleLatest)
 	mux.HandleFunc("GET /api/v1/devices/{device_id}/stream", a.handleStream)
+	mux.HandleFunc("GET /api/v1/stream", a.handleGlobalStream)
 	mux.HandleFunc("POST /api/v1/devices/{device_id}/command", a.handleCommand)
 	mux.HandleFunc("GET /health", a.handleHealth)
 	mux.Handle("GET /metrics", promhttp.Handler())
@@ -84,10 +85,16 @@ func (a *Adapter) Start(ctx context.Context, b bus.MessageBus, reg *registry.Reg
 		if deviceID == "" {
 			return
 		}
+		cacheStart := time.Now()
 		if err := reg.UpsertLatestMessage(deviceID, data); err != nil {
 			slog.Error("upsert latest message", "component", "http", "device_id", deviceID, "error", err)
 		}
-		a.fanoutSSE(deviceID, data)
+		adapter := "unknown"
+		if msg, err := canonical.UnmarshalMessage(data); err == nil {
+			adapter = msg.GetSourceProto()
+		}
+		metrics.ObserveMessageLatencyMS(adapter, "cache", time.Since(cacheStart))
+		a.broadcastToSSEClients(deviceID, data)
 	})
 	if err != nil {
 		return fmt.Errorf("http subscribe iot.telemetry.>: %w", err)
@@ -157,9 +164,10 @@ func normalizePath(path string) string {
 // ── Ingest ──────────────────────────────────────────────
 
 type ingestRequest struct {
-	Metric string  `json:"metric"`
-	Value  float64 `json:"value"`
-	Unit   string  `json:"unit"`
+	Metric   string            `json:"metric"`
+	Value    float64           `json:"value"`
+	Unit     string            `json:"unit"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
@@ -194,7 +202,8 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 
 	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "http", req.Metric, req.Value, req.Unit)
-	data, err := canonical.Marshal(msg)
+	msg.Metadata = req.Metadata
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		gohttp.Error(w, `{"error":"marshal failed"}`, gohttp.StatusInternalServerError)
 		return
@@ -206,6 +215,7 @@ func (a *Adapter) handleIngest(w gohttp.ResponseWriter, r *gohttp.Request) {
 		gohttp.Error(w, `{"error":"publish failed"}`, gohttp.StatusInternalServerError)
 		return
 	}
+	metrics.ObserveMessageLatencyMS("http", "publish", time.Since(publishStart))
 	metrics.MessageProcessingDuration.WithLabelValues("http", "publish").Observe(time.Since(publishStart).Seconds())
 	metrics.RecordPublish("http")
 
@@ -283,6 +293,37 @@ func (a *Adapter) handleStream(w gohttp.ResponseWriter, r *gohttp.Request) {
 	}
 }
 
+func (a *Adapter) handleGlobalStream(w gohttp.ResponseWriter, r *gohttp.Request) {
+	flusher, ok := w.(gohttp.Flusher)
+	if !ok {
+		gohttp.Error(w, `{"error":"streaming not supported"}`, gohttp.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := make(chan []byte, a.cfg.SSEChannelCap)
+	a.addSSEClient("*", ch)
+	defer a.removeSSEClient("*", ch)
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case data := <-ch:
+			msg, err := canonical.UnmarshalMessage(data)
+			if err != nil {
+				continue
+			}
+			payload, _ := json.Marshal(messageToJSON(msg))
+			fmt.Fprintf(w, "data: %s\n\n", payload)
+			flusher.Flush()
+		}
+	}
+}
+
 func (a *Adapter) addSSEClient(deviceID string, ch chan []byte) {
 	a.ssesMu.Lock()
 	defer a.ssesMu.Unlock()
@@ -306,23 +347,20 @@ func (a *Adapter) removeSSEClient(deviceID string, ch chan []byte) {
 	metrics.SSEClientsActive.Set(float64(a.sseClientCount.Load()))
 }
 
-func (a *Adapter) fanoutSSE(deviceID string, data []byte) {
-	a.ssesMu.Lock()
-	defer a.ssesMu.Unlock()
-	for _, ch := range a.sseClients[deviceID] {
+func (a *Adapter) broadcastToSSEClients(deviceID string, data []byte) {
+	a.ssesMu.RLock()
+	clients := append([]chan []byte(nil), a.sseClients[deviceID]...)
+	globalClients := append([]chan []byte(nil), a.sseClients["*"]...)
+	a.ssesMu.RUnlock()
+	clients = append(clients, globalClients...)
+
+	for _, ch := range clients {
 		select {
 		case ch <- data:
 		default:
-			slog.Warn("SSE channel full, dropping oldest message",
+			slog.Warn("sse: slow consumer, dropping message",
 				"component", "http", "device_id", deviceID)
-			select {
-			case <-ch:
-			default:
-			}
-			select {
-			case ch <- data:
-			default:
-			}
+			metrics.SSEDroppedMessagesTotal.Inc()
 		}
 	}
 }
@@ -348,7 +386,7 @@ func (a *Adapter) handleCommand(w gohttp.ResponseWriter, r *gohttp.Request) {
 	}
 
 	msg := canonical.NewCommandMessage(deviceID, "http", req.Action, req.Params)
-	data, err := canonical.Marshal(msg)
+	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		gohttp.Error(w, `{"error":"marshal failed"}`, gohttp.StatusInternalServerError)
 		return

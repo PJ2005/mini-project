@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,20 +19,32 @@ import (
 	adapthttp "interlink/internal/adapter/http"
 	adaptmqtt "interlink/internal/adapter/mqtt"
 	"interlink/internal/bus"
-	"interlink/internal/canonical"
+	"interlink/internal/forwarder"
 	"interlink/internal/metrics"
+	"interlink/internal/pipeline"
 	"interlink/internal/policy"
 	"interlink/internal/registry"
+	"interlink/internal/ui"
 )
 
 type Config struct {
-	NATS             NATSConfig       `yaml:"nats"`
-	MQTT             adaptmqtt.Config `yaml:"mqtt"`
-	HTTP             adapthttp.Config `yaml:"http"`
-	CoAP             adaptcoap.Config `yaml:"coap"`
-	Registry         RegistryConfig   `yaml:"registry"`
-	Policy           policy.Config    `yaml:"policy"`
-	HeartbeatTimeout Duration         `yaml:"heartbeat_timeout"`
+	NATS             NATSConfig                `yaml:"nats"`
+	MQTT             adaptmqtt.Config          `yaml:"mqtt"`
+	HTTP             adapthttp.Config          `yaml:"http"`
+	CoAP             adaptcoap.Config          `yaml:"coap"`
+	Modbus           adapter.ModbusConfig      `yaml:"modbus"`
+	WebSocket        adapter.WebSocketConfig   `yaml:"websocket"`
+	AMQP             adapter.AMQPConfig        `yaml:"amqp"`
+	Forwarders       ForwardersConfig          `yaml:"forwarders"`
+	Registry         RegistryConfig            `yaml:"registry"`
+	Policy           policy.Config             `yaml:"policy"`
+	Pipelines        []pipeline.PipelineConfig `yaml:"pipelines"`
+	UI               UIConfig                  `yaml:"ui"`
+	HeartbeatTimeout Duration                  `yaml:"heartbeat_timeout"`
+}
+
+type UIConfig struct {
+	Listen string `yaml:"listen"`
 }
 
 type NATSConfig struct {
@@ -40,6 +54,12 @@ type NATSConfig struct {
 
 type RegistryConfig struct {
 	DBPath string `yaml:"db_path"`
+}
+
+type ForwardersConfig struct {
+	MQTT     forwarder.MQTTConfig     `yaml:"mqtt"`
+	Webhook  forwarder.WebhookConfig  `yaml:"webhook"`
+	InfluxDB forwarder.InfluxDBConfig `yaml:"influxdb"`
 }
 
 // Duration wraps time.Duration for YAML unmarshalling from strings like "5m".
@@ -63,9 +83,18 @@ func Run(configPath string) error {
 	if err != nil {
 		return err
 	}
+	if cfg.UI.Listen == "" {
+		cfg.UI.Listen = ":8081"
+	}
 
 	// Fix 16: validate config before establishing any connections.
 	if errs := validateConfig(cfg); len(errs) > 0 {
+		if cfg.UI.Listen == cfg.HTTP.Listen {
+			slog.Error("fatal config error: ui.listen must differ from http.listen",
+				"component", "gateway",
+				"ui_listen", cfg.UI.Listen,
+				"http_listen", cfg.HTTP.Listen)
+		}
 		fmt.Fprintln(os.Stderr, "Configuration validation failed:")
 		for _, e := range errs {
 			fmt.Fprintf(os.Stderr, "  • %s\n", e)
@@ -119,10 +148,12 @@ func Run(configPath string) error {
 	// Policy — Fix 4: provide bus reference for command routing.
 	engine := policy.New(cfg.Policy)
 	engine.SetBus(msgBus)
+	engine.StartWorkerPool(ctx, cfg.Policy.WorkerCount)
 	slog.Info("policy engine loaded",
 		"component", "gateway",
 		"rules", len(cfg.Policy.Rules),
-		"default_action", cfg.Policy.DefaultAction)
+		"default_action", cfg.Policy.DefaultAction,
+		"worker_count", cfg.Policy.WorkerCount)
 
 	// Fix 5: start policy hot-reload file watcher.
 	if err := engine.WatchConfig(ctx, configPath); err != nil {
@@ -131,13 +162,8 @@ func Run(configPath string) error {
 
 	// Wire policy as a NATS subscription interceptor.
 	_, err = msgBus.Subscribe("iot.>", func(subject string, data []byte) {
-		msg, mErr := canonical.UnmarshalMessage(data)
-		if mErr != nil {
-			slog.Error("unmarshal error", "component", "gateway", "subject", subject, "error", mErr)
-			return
-		}
-		if !engine.Evaluate(msg) {
-			return
+		if !engine.Submit(subject, data) {
+			metrics.PolicyDroppedTotal.Inc()
 		}
 	})
 	if err != nil {
@@ -150,6 +176,15 @@ func Run(configPath string) error {
 		adaptmqtt.New(cfg.MQTT),
 		httpAdapter,
 		adaptcoap.New(cfg.CoAP),
+	}
+	if cfg.Modbus.Host != "" && len(cfg.Modbus.Registers) > 0 {
+		adapters = append(adapters, adapter.NewModbus(cfg.Modbus))
+	}
+	if cfg.WebSocket.Listen != "" {
+		adapters = append(adapters, adapter.NewWebSocket(cfg.WebSocket))
+	}
+	if cfg.AMQP.URL != "" && cfg.AMQP.Queue != "" {
+		adapters = append(adapters, adapter.NewAMQP(cfg.AMQP))
 	}
 
 	adapterNames := make([]string, len(adapters))
@@ -165,6 +200,61 @@ func Run(configPath string) error {
 		}
 		slog.Info("adapter started", "component", "gateway", "adapter", a.Name())
 	}
+
+	forwarders := make([]forwarder.Forwarder, 0)
+	if cfg.Forwarders.MQTT.BrokerURL != "" {
+		mqttForwarder, err := forwarder.NewMQTT(cfg.Forwarders.MQTT)
+		if err != nil {
+			return fmt.Errorf("init mqtt forwarder: %w", err)
+		}
+		forwarders = append(forwarders, mqttForwarder)
+	}
+	if cfg.Forwarders.Webhook.URL != "" {
+		forwarders = append(forwarders, forwarder.NewWebhook(cfg.Forwarders.Webhook))
+	}
+	if cfg.Forwarders.InfluxDB.URL != "" &&
+		cfg.Forwarders.InfluxDB.Token != "" &&
+		cfg.Forwarders.InfluxDB.Org != "" &&
+		cfg.Forwarders.InfluxDB.Bucket != "" {
+		forwarders = append(forwarders, forwarder.NewInfluxDB(cfg.Forwarders.InfluxDB))
+	}
+	for _, fw := range forwarders {
+		if err := fw.Start(ctx, msgBus); err != nil {
+			return fmt.Errorf("start forwarder %s: %w", fw.Name(), err)
+		}
+		slog.Info("forwarder started", "component", "gateway", "forwarder", fw.Name())
+	}
+
+	var pipelines []*pipeline.Pipeline
+	for _, pc := range cfg.Pipelines {
+		pl, err := pipeline.New(pc, msgBus, reg)
+		if err != nil {
+			slog.Error("pipeline init error",
+				"component", "gateway",
+				"pipeline", pc.Name,
+				"error", err)
+			continue
+		}
+		if err := pl.Start(ctx); err != nil {
+			slog.Error("pipeline start error",
+				"component", "gateway",
+				"pipeline", pc.Name,
+				"error", err)
+			continue
+		}
+		pipelines = append(pipelines, pl)
+	}
+
+	uiServer := ui.New(pipelines, reg)
+	uiHTTP := &http.Server{Addr: cfg.UI.Listen, Handler: uiServer.Handler()}
+	go func() {
+		slog.Info("InterLink UI available at http://localhost:8081",
+			"component", "gateway",
+			"listen", cfg.UI.Listen)
+		if err := uiHTTP.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("ui server error", "component", "gateway", "error", err)
+		}
+	}()
 
 	// Start metrics background collectors.
 	metrics.StartCollector(ctx, reg, 10*time.Second)
@@ -203,9 +293,24 @@ func Run(configPath string) error {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5_000_000_000) // 5s
 	defer shutdownCancel()
 
+	for _, p := range pipelines {
+		p.Stop(shutdownCtx)
+	}
+
+	uiShutdownCtx, uiShutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	if err := uiHTTP.Shutdown(uiShutdownCtx); err != nil {
+		slog.Error("ui shutdown error", "component", "gateway", "error", err)
+	}
+	uiShutdownCancel()
+
 	for _, a := range adapters {
 		if err := a.Stop(shutdownCtx); err != nil {
 			slog.Error("error stopping adapter", "component", "gateway", "adapter", a.Name(), "error", err)
+		}
+	}
+	for _, fw := range forwarders {
+		if err := fw.Stop(shutdownCtx); err != nil {
+			slog.Error("error stopping forwarder", "component", "gateway", "forwarder", fw.Name(), "error", err)
 		}
 	}
 
@@ -251,6 +356,12 @@ func validateConfig(cfg *Config) []string {
 	if cfg.CoAP.Listen == "" {
 		errs = append(errs, "coap.listen is required and must be non-empty")
 	}
+	if cfg.UI.Listen == "" {
+		errs = append(errs, "ui.listen is required and must be non-empty")
+	}
+	if cfg.UI.Listen == cfg.HTTP.Listen {
+		errs = append(errs, fmt.Sprintf("ui.listen %q must differ from http.listen %q", cfg.UI.Listen, cfg.HTTP.Listen))
+	}
 
 	validActions := map[string]bool{"allow": true, "deny": true}
 	if cfg.Policy.DefaultAction != "" && !validActions[cfg.Policy.DefaultAction] {
@@ -260,6 +371,23 @@ func validateConfig(cfg *Config) []string {
 		action := strings.ToLower(rule.Action)
 		if !validActions[action] {
 			errs = append(errs, fmt.Sprintf("policy.rules[%d].action %q must be 'allow' or 'deny'", i, rule.Action))
+		}
+	}
+	if cfg.Policy.WorkerCount < 1 {
+		errs = append(errs, fmt.Sprintf("policy.worker_count %d must be >= 1", cfg.Policy.WorkerCount))
+	}
+
+	for i, pl := range cfg.Pipelines {
+		if pl.Sink.Type != "http_post" {
+			continue
+		}
+		if pl.Sink.URL == "" {
+			errs = append(errs, fmt.Sprintf("pipelines[%d] (%s): http_post sink requires non-empty url", i, pl.Name))
+			continue
+		}
+		u, err := url.Parse(pl.Sink.URL)
+		if err != nil || u == nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			errs = append(errs, fmt.Sprintf("pipelines[%d] (%s): http_post sink url %q must be a valid http/https URL", i, pl.Name, pl.Sink.URL))
 		}
 	}
 

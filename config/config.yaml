@@ -31,6 +31,61 @@ coap:
   # Listen address for the CoAP adapter (UDP, RFC 7252). Standard port is 5683.
   listen: ":5683"
 
+modbus:
+  # Modbus TCP endpoint.
+  host: ""
+  port: 502
+  # Poll interval for register reads.
+  poll_interval_ms: 1000
+  # Register list:
+  # type: coil | holding | input
+  registers: []
+  # Example:
+  # registers:
+  #   - name: "temperature_raw"
+  #     address: 0
+  #     type: "holding"
+  #     device_id: "modbus-sensor-01"
+
+websocket:
+  # WebSocket ingest adapter listen address.
+  # Device path: ws://<host>:<port>/ws/<device_id>
+  listen: ""
+
+amqp:
+  # RabbitMQ connection URL.
+  url: ""
+  queue: ""
+  exchange: ""
+  routing_key: ""
+  # JSON field name used to read device_id from each AMQP payload.
+  device_id_field: "device_id"
+
+forwarders:
+  mqtt:
+    # Re-publish canonical NATS traffic to external MQTT broker.
+    broker_url: ""
+    topic_template: "interlink/{{.DeviceID}}/{{.Type}}"
+    client_id: "interlink-forwarder-mqtt"
+    qos: 1
+  webhook:
+    # Forward canonical messages as JSON via HTTP.
+    url: ""
+    method: "POST"
+    headers: {}
+    # Optional glob filter on device_id (example: "sensor-*")
+    filter: ""
+  influxdb:
+    # Forward telemetry stream into InfluxDB.
+    url: ""
+    token: ""
+    org: ""
+    bucket: ""
+
+ui:
+  # Read-only web UI listen address.
+  listen: ":8081"
+
 registry:
   # SQLite database file path. Created automatically on first run.
   db_path: "./interlink.db"
@@ -42,6 +97,8 @@ heartbeat_timeout: "5m"
 policy:
   # Default action when no rule matches: "allow" or "deny".
   default_action: "allow"
+  # Worker count for the policy evaluation pool. Must be >= 1.
+  worker_count: 1
   # Rules evaluated top-to-bottom, first match wins.
   rules:
     - device_pattern: "*"
@@ -64,3 +121,62 @@ policy:
     #   action: "allow"
     #   command_target: "actuator-01"
     #   command_action: "adjust"
+
+# Pipeline DSL (Phase 3).
+# Users can define source -> transform chain -> sink flows without writing Go code.
+# pipelines:
+#   - name: temperature-bridge-http
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#       - type: scale
+#         factor: 1.8
+#         offset: 32
+#         as: temp_f
+#       - type: rename
+#         from: temp_f
+#         to: value
+#       - type: filter
+#         field: value
+#         min: -100
+#         max: 250
+#       - type: script
+#         script: |
+#           value = value * 1.8 + 32
+#           if value > 200 { value = 200 }
+#     sink:
+#       type: http_post
+#       url: http://dashboard.local/ingest
+#       timeout: 3s
+#
+#   - name: temperature-bridge-nats
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#       - type: scale
+#         factor: 1.8
+#         offset: 32
+#         as: value
+#     sink:
+#       type: nats_publish
+#       subject: pipelines.temperature.out
+#
+#   - name: temperature-bridge-mqtt
+#     source:
+#       type: nats
+#       subject: iot.telemetry.>
+#     transforms:
+#       - type: extract
+#         field: temperature
+#         as: value
+#     sink:
+#       type: mqtt_publish
+#       topic: pipelines/temperature/out

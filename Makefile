@@ -4,10 +4,13 @@ PROTO    := proto/canonical.proto
 PB_OUT   := internal/canonical
 CONFIG   := config/config.yaml
 
-.PHONY: build run proto clean
+.PHONY: build build-release run proto clean
 
 build:
 	go build -o $(BINARY) $(PKG)
+
+build-release:
+	go build -ldflags="-s -w" -trimpath -o $(BINARY) $(PKG)
 
 run: build
 	./$(BINARY) -config $(CONFIG)

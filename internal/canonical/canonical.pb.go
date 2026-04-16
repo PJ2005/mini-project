@@ -7,17 +7,17 @@
 package canonical
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
-	unsafe "unsafe"
+
+	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 )
 
 const (
-	// Verify that this generated code is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(20 - protoimpl.MinVersion)
-	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
@@ -37,11 +37,8 @@ func (x *TelemetryPayload) Reset() {
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *TelemetryPayload) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TelemetryPayload) ProtoMessage() {}
+func (x *TelemetryPayload) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*TelemetryPayload) ProtoMessage()    {}
 
 func (x *TelemetryPayload) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_canonical_proto_msgTypes[0]
@@ -53,11 +50,6 @@ func (x *TelemetryPayload) ProtoReflect() protoreflect.Message {
 		return ms
 	}
 	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TelemetryPayload.ProtoReflect.Descriptor instead.
-func (*TelemetryPayload) Descriptor() ([]byte, []int) {
-	return file_proto_canonical_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *TelemetryPayload) GetMetric() string {
@@ -96,11 +88,8 @@ func (x *CommandPayload) Reset() {
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CommandPayload) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CommandPayload) ProtoMessage() {}
+func (x *CommandPayload) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*CommandPayload) ProtoMessage()    {}
 
 func (x *CommandPayload) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_canonical_proto_msgTypes[1]
@@ -112,11 +101,6 @@ func (x *CommandPayload) ProtoReflect() protoreflect.Message {
 		return ms
 	}
 	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CommandPayload.ProtoReflect.Descriptor instead.
-func (*CommandPayload) Descriptor() ([]byte, []int) {
-	return file_proto_canonical_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CommandPayload) GetAction() string {
@@ -149,11 +133,8 @@ func (x *EventPayload) Reset() {
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *EventPayload) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EventPayload) ProtoMessage() {}
+func (x *EventPayload) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*EventPayload) ProtoMessage()    {}
 
 func (x *EventPayload) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_canonical_proto_msgTypes[2]
@@ -165,11 +146,6 @@ func (x *EventPayload) ProtoReflect() protoreflect.Message {
 		return ms
 	}
 	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EventPayload.ProtoReflect.Descriptor instead.
-func (*EventPayload) Descriptor() ([]byte, []int) {
-	return file_proto_canonical_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *EventPayload) GetEventType() string {
@@ -194,18 +170,13 @@ func (x *EventPayload) GetDetail() string {
 }
 
 type Message struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	MessageId   string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	DeviceId    string                 `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
-	TimestampMs int64                  `protobuf:"varint,3,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
-	SourceProto string                 `protobuf:"bytes,4,opt,name=source_proto,json=sourceProto,proto3" json:"source_proto,omitempty"`
-	// Types that are valid to be assigned to Payload:
-	//
-	//	*Message_Telemetry
-	//	*Message_Command
-	//	*Message_Event
-	Payload       isMessage_Payload `protobuf_oneof:"payload"`
-	Metadata      map[string]string `protobuf:"bytes,20,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	DeviceId      string                 `protobuf:"bytes,2,opt,name=device_id,json=deviceId,proto3" json:"device_id,omitempty"`
+	TimestampMs   int64                  `protobuf:"varint,3,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	SourceProto   string                 `protobuf:"bytes,4,opt,name=source_proto,json=sourceProto,proto3" json:"source_proto,omitempty"`
+	Payload       isMessage_Payload      `protobuf_oneof:"payload"`
+	Metadata      map[string]string      `protobuf:"bytes,20,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -217,11 +188,8 @@ func (x *Message) Reset() {
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Message) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Message) ProtoMessage() {}
+func (x *Message) String() string { return protoimpl.X.MessageStringOf(x) }
+func (*Message) ProtoMessage()    {}
 
 func (x *Message) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_canonical_proto_msgTypes[3]
@@ -233,11 +201,6 @@ func (x *Message) ProtoReflect() protoreflect.Message {
 		return ms
 	}
 	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Message.ProtoReflect.Descriptor instead.
-func (*Message) Descriptor() ([]byte, []int) {
-	return file_proto_canonical_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Message) GetMessageId() string {
@@ -277,8 +240,8 @@ func (x *Message) GetPayload() isMessage_Payload {
 
 func (x *Message) GetTelemetry() *TelemetryPayload {
 	if x != nil {
-		if x, ok := x.Payload.(*Message_Telemetry); ok {
-			return x.Telemetry
+		if v, ok := x.Payload.(*Message_Telemetry); ok {
+			return v.Telemetry
 		}
 	}
 	return nil
@@ -286,8 +249,8 @@ func (x *Message) GetTelemetry() *TelemetryPayload {
 
 func (x *Message) GetCommand() *CommandPayload {
 	if x != nil {
-		if x, ok := x.Payload.(*Message_Command); ok {
-			return x.Command
+		if v, ok := x.Payload.(*Message_Command); ok {
+			return v.Command
 		}
 	}
 	return nil
@@ -295,8 +258,8 @@ func (x *Message) GetCommand() *CommandPayload {
 
 func (x *Message) GetEvent() *EventPayload {
 	if x != nil {
-		if x, ok := x.Payload.(*Message_Event); ok {
-			return x.Event
+		if v, ok := x.Payload.(*Message_Event); ok {
+			return v.Event
 		}
 	}
 	return nil
@@ -309,9 +272,7 @@ func (x *Message) GetMetadata() map[string]string {
 	return nil
 }
 
-type isMessage_Payload interface {
-	isMessage_Payload()
-}
+type isMessage_Payload interface{ isMessage_Payload() }
 
 type Message_Telemetry struct {
 	Telemetry *TelemetryPayload `protobuf:"bytes,10,opt,name=telemetry,proto3,oneof"`
@@ -326,54 +287,89 @@ type Message_Event struct {
 }
 
 func (*Message_Telemetry) isMessage_Payload() {}
-
-func (*Message_Command) isMessage_Payload() {}
-
-func (*Message_Event) isMessage_Payload() {}
+func (*Message_Command) isMessage_Payload()   {}
+func (*Message_Event) isMessage_Payload()     {}
 
 var File_proto_canonical_proto protoreflect.FileDescriptor
 
-const file_proto_canonical_proto_rawDesc = "" +
-	"\n" +
-	"\x15proto/canonical.proto\x12\binterlink\"T\n" +
-	"\x10TelemetryPayload\x12\x16\n" +
-	"\x06metric\x18\x01 \x01(\tR\x06metric\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x12\n" +
-	"\x04unit\x18\x03 \x01(\tR\x04unit\"@\n" +
-	"\x0eCommandPayload\x12\x16\n" +
-	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
-	"\x06params\x18\x02 \x01(\fR\x06params\"a\n" +
-	"\fEventPayload\x12\x1d\n" +
-	"\n" +
-	"event_type\x18\x01 \x01(\tR\teventType\x12\x1a\n" +
-	"\bseverity\x18\x02 \x01(\tR\bseverity\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xb2\x03\n" +
-	"\aMessage\x12\x1d\n" +
-	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x1b\n" +
-	"\tdevice_id\x18\x02 \x01(\tR\bdeviceId\x12!\n" +
-	"\ftimestamp_ms\x18\x03 \x01(\x03R\vtimestampMs\x12!\n" +
-	"\fsource_proto\x18\x04 \x01(\tR\vsourceProto\x12:\n" +
-	"\ttelemetry\x18\n" +
-	" \x01(\v2\x1a.interlink.TelemetryPayloadH\x00R\ttelemetry\x124\n" +
-	"\acommand\x18\v \x01(\v2\x18.interlink.CommandPayloadH\x00R\acommand\x12.\n" +
-	"\x05event\x18\f \x01(\v2\x16.interlink.EventPayloadH\x00R\x05event\x12;\n" +
-	"\bmetadata\x18\x14 \x03(\v2\x1f.interlink.Message.MetadataEntryR\bmetadata\x1a;\n" +
-	"\rMetadataEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\t\n" +
-	"\apayloadB\x1dZ\x1binterlink/internal/canonicalb\x06proto3"
-
 var (
-	file_proto_canonical_proto_rawDescOnce sync.Once
-	file_proto_canonical_proto_rawDescData []byte
+	file_proto_canonical_proto_rawDescBytesOnce sync.Once
+	file_proto_canonical_proto_rawDescData      []byte
+	file_proto_canonical_proto_rawDescGZIPOnce  sync.Once
+	file_proto_canonical_proto_rawDescGZIPData  []byte
 )
 
-func file_proto_canonical_proto_rawDescGZIP() []byte {
-	file_proto_canonical_proto_rawDescOnce.Do(func() {
-		file_proto_canonical_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_canonical_proto_rawDesc), len(file_proto_canonical_proto_rawDesc)))
+func file_proto_canonical_proto_rawDescBytes() []byte {
+	file_proto_canonical_proto_rawDescBytesOnce.Do(func() {
+		fd := &descriptorpb.FileDescriptorProto{
+			Name:    proto.String("proto/canonical.proto"),
+			Package: proto.String("interlink"),
+			Syntax:  proto.String("proto3"),
+			Options: &descriptorpb.FileOptions{GoPackage: proto.String("interlink/internal/canonical")},
+			MessageType: []*descriptorpb.DescriptorProto{
+				{
+					Name: proto.String("TelemetryPayload"),
+					Field: []*descriptorpb.FieldDescriptorProto{
+						{Name: proto.String("metric"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("metric")},
+						{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_DOUBLE.Enum(), JsonName: proto.String("value")},
+						{Name: proto.String("unit"), Number: proto.Int32(3), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("unit")},
+					},
+				},
+				{
+					Name: proto.String("CommandPayload"),
+					Field: []*descriptorpb.FieldDescriptorProto{
+						{Name: proto.String("action"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("action")},
+						{Name: proto.String("params"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_BYTES.Enum(), JsonName: proto.String("params")},
+					},
+				},
+				{
+					Name: proto.String("EventPayload"),
+					Field: []*descriptorpb.FieldDescriptorProto{
+						{Name: proto.String("event_type"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("eventType")},
+						{Name: proto.String("severity"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("severity")},
+						{Name: proto.String("detail"), Number: proto.Int32(3), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("detail")},
+					},
+				},
+				{
+					Name: proto.String("Message"),
+					Field: []*descriptorpb.FieldDescriptorProto{
+						{Name: proto.String("message_id"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("messageId")},
+						{Name: proto.String("device_id"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("deviceId")},
+						{Name: proto.String("timestamp_ms"), Number: proto.Int32(3), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_INT64.Enum(), JsonName: proto.String("timestampMs")},
+						{Name: proto.String("source_proto"), Number: proto.Int32(4), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("sourceProto")},
+						{Name: proto.String("telemetry"), Number: proto.Int32(10), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".interlink.TelemetryPayload"), OneofIndex: proto.Int32(0), JsonName: proto.String("telemetry")},
+						{Name: proto.String("command"), Number: proto.Int32(11), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".interlink.CommandPayload"), OneofIndex: proto.Int32(0), JsonName: proto.String("command")},
+						{Name: proto.String("event"), Number: proto.Int32(12), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".interlink.EventPayload"), OneofIndex: proto.Int32(0), JsonName: proto.String("event")},
+						{Name: proto.String("metadata"), Number: proto.Int32(20), Label: descriptorpb.FieldDescriptorProto_LABEL_REPEATED.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_MESSAGE.Enum(), TypeName: proto.String(".interlink.Message.MetadataEntry"), JsonName: proto.String("metadata")},
+					},
+					OneofDecl: []*descriptorpb.OneofDescriptorProto{{Name: proto.String("payload")}},
+					NestedType: []*descriptorpb.DescriptorProto{
+						{
+							Name: proto.String("MetadataEntry"),
+							Field: []*descriptorpb.FieldDescriptorProto{
+								{Name: proto.String("key"), Number: proto.Int32(1), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("key")},
+								{Name: proto.String("value"), Number: proto.Int32(2), Label: descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(), Type: descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(), JsonName: proto.String("value")},
+							},
+							Options: &descriptorpb.MessageOptions{MapEntry: proto.Bool(true)},
+						},
+					},
+				},
+			},
+		}
+		data, err := proto.Marshal(fd)
+		if err != nil {
+			panic(err)
+		}
+		file_proto_canonical_proto_rawDescData = data
 	})
 	return file_proto_canonical_proto_rawDescData
+}
+
+func file_proto_canonical_proto_rawDescGZIP() []byte {
+	file_proto_canonical_proto_rawDescGZIPOnce.Do(func() {
+		file_proto_canonical_proto_rawDescGZIPData = protoimpl.X.CompressGZIP(file_proto_canonical_proto_rawDescBytes())
+	})
+	return file_proto_canonical_proto_rawDescGZIPData
 }
 
 var file_proto_canonical_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
@@ -410,7 +406,7 @@ func file_proto_canonical_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_canonical_proto_rawDesc), len(file_proto_canonical_proto_rawDesc)),
+			RawDescriptor: file_proto_canonical_proto_rawDescBytes(),
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,

@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -20,8 +22,18 @@ type Device struct {
 }
 
 type Registry struct {
-	db     *sql.DB
-	dbPath string
+	db          *sql.DB
+	dbPath      string
+	latestCache sync.Map
+	writeCh     chan latestWrite
+	writeWG     sync.WaitGroup
+	writeMu     sync.RWMutex
+	closed      bool
+}
+
+type latestWrite struct {
+	deviceID string
+	data     []byte
 }
 
 func New(dbPath string) (*Registry, error) {
@@ -35,10 +47,17 @@ func New(dbPath string) (*Registry, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("ping registry db: %w", err)
 	}
-	r := &Registry{db: db, dbPath: dbPath}
+	r := &Registry{db: db, dbPath: dbPath, writeCh: make(chan latestWrite, 512)}
 	if err := r.migrate(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
+	if err := r.loadLatestCache(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	r.writeWG.Add(1)
+	go r.runLatestWriter()
 	return r, nil
 }
 
@@ -132,6 +151,51 @@ func (r *Registry) Register(d Device) error {
 	return nil
 }
 
+func (r *Registry) runLatestWriter() {
+	defer r.writeWG.Done()
+	for item := range r.writeCh {
+		if err := r.upsertLatestMessage(item.deviceID, item.data); err != nil {
+			slog.Error("upsert latest message",
+				"component", "registry",
+				"device_id", item.deviceID,
+				"error", err)
+		}
+	}
+}
+
+func (r *Registry) loadLatestCache() error {
+	rows, err := r.db.Query(`SELECT device_id, data FROM latest_messages`)
+	if err != nil {
+		return fmt.Errorf("preload latest messages: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var deviceID string
+		var data []byte
+		if err := rows.Scan(&deviceID, &data); err != nil {
+			return fmt.Errorf("preload latest messages scan: %w", err)
+		}
+		r.latestCache.Store(deviceID, append([]byte(nil), data...))
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("preload latest messages rows: %w", err)
+	}
+	return nil
+}
+
+func (r *Registry) upsertLatestMessage(deviceID string, data []byte) error {
+	_, err := r.db.Exec(
+		`INSERT INTO latest_messages (device_id, data, updated_at)
+		 VALUES (?, ?, CURRENT_TIMESTAMP)
+		 ON CONFLICT(device_id) DO UPDATE SET
+		   data = excluded.data,
+		   updated_at = CURRENT_TIMESTAMP`,
+		deviceID, data,
+	)
+	return err
+}
+
 func (r *Registry) GetByID(deviceID string) (*Device, error) {
 	row := r.db.QueryRow(
 		`SELECT device_id, name, protocol, status, metadata, created_at, last_seen FROM devices WHERE device_id = ?`,
@@ -151,6 +215,29 @@ func (r *Registry) GetByProtocol(protocol string) ([]Device, error) {
 	defer rows.Close()
 
 	var devices []Device
+	for rows.Next() {
+		d, err := scanDeviceRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		devices = append(devices, *d)
+	}
+	return devices, rows.Err()
+}
+
+// ListDevices returns all devices ordered by last_seen descending.
+func (r *Registry) ListDevices() ([]Device, error) {
+	rows, err := r.db.Query(
+		`SELECT device_id, name, protocol, status, metadata, created_at, last_seen
+		 FROM devices
+		 ORDER BY last_seen DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list devices: %w", err)
+	}
+	defer rows.Close()
+
+	devices := make([]Device, 0)
 	for rows.Next() {
 		d, err := scanDeviceRow(rows)
 		if err != nil {
@@ -224,19 +311,23 @@ func (r *Registry) DeviceCountByProtocol() (map[string]int, error) {
 
 // UpsertLatestMessage stores the latest serialized message for a device.
 func (r *Registry) UpsertLatestMessage(deviceID string, data []byte) error {
-	_, err := r.db.Exec(
-		`INSERT INTO latest_messages (device_id, data, updated_at)
-		 VALUES (?, ?, CURRENT_TIMESTAMP)
-		 ON CONFLICT(device_id) DO UPDATE SET
-		   data = excluded.data,
-		   updated_at = CURRENT_TIMESTAMP`,
-		deviceID, data,
-	)
-	return err
+	r.writeMu.RLock()
+	defer r.writeMu.RUnlock()
+	if r.closed {
+		return fmt.Errorf("registry closed")
+	}
+	copyData := append([]byte(nil), data...)
+	r.latestCache.Store(deviceID, copyData)
+	r.writeCh <- latestWrite{deviceID: deviceID, data: copyData}
+	return nil
 }
 
 // GetLatestMessage retrieves the latest serialized message for a device.
 func (r *Registry) GetLatestMessage(deviceID string) ([]byte, error) {
+	if cached, ok := r.latestCache.Load(deviceID); ok {
+		data := cached.([]byte)
+		return append([]byte(nil), data...), nil
+	}
 	var data []byte
 	err := r.db.QueryRow(
 		`SELECT data FROM latest_messages WHERE device_id = ?`,
@@ -244,6 +335,9 @@ func (r *Registry) GetLatestMessage(deviceID string) ([]byte, error) {
 	).Scan(&data)
 	if err == sql.ErrNoRows {
 		return nil, nil
+	}
+	if err == nil {
+		r.latestCache.Store(deviceID, append([]byte(nil), data...))
 	}
 	return data, err
 }
@@ -260,6 +354,15 @@ func (r *Registry) InsertDeadLetter(subject string, data []byte, errMsg string) 
 }
 
 func (r *Registry) Close() error {
+	r.writeMu.Lock()
+	if r.closed {
+		r.writeMu.Unlock()
+		return nil
+	}
+	r.closed = true
+	close(r.writeCh)
+	r.writeMu.Unlock()
+	r.writeWG.Wait()
 	return r.db.Close()
 }
 

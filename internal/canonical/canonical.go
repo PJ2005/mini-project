@@ -10,10 +10,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// bufPool reduces GC pressure by reusing byte slices for proto.Marshal.
-var bufPool = sync.Pool{
+// marshalBufPool reduces GC pressure by reusing byte slices for marshaling.
+var marshalBufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 0, 256)
+		b := make([]byte, 0, 512)
 		return &b
 	},
 }
@@ -78,7 +78,7 @@ func NewCommandMessage(deviceID, sourceProto, action string, params []byte) *Mes
 // Marshal serializes a canonical Message to Protobuf wire format.
 // Internally uses a sync.Pool to reduce per-message allocation overhead.
 func Marshal(m *Message) ([]byte, error) {
-	bp := bufPool.Get().(*[]byte)
+	bp := marshalBufPool.Get().(*[]byte)
 	buf := (*bp)[:0]
 
 	opts := proto.MarshalOptions{}
@@ -86,7 +86,7 @@ func Marshal(m *Message) ([]byte, error) {
 	buf, err = opts.MarshalAppend(buf, m)
 	if err != nil {
 		*bp = buf
-		bufPool.Put(bp)
+		marshalBufPool.Put(bp)
 		return nil, err
 	}
 
@@ -94,7 +94,28 @@ func Marshal(m *Message) ([]byte, error) {
 	out := make([]byte, len(buf))
 	copy(out, buf)
 	*bp = buf
-	bufPool.Put(bp)
+	marshalBufPool.Put(bp)
+	return out, nil
+}
+
+// MarshalPooled serializes a canonical Message using the shared marshal buffer pool.
+func MarshalPooled(m *Message) ([]byte, error) {
+	bp := marshalBufPool.Get().(*[]byte)
+	buf := (*bp)[:0]
+
+	opts := proto.MarshalOptions{}
+	var err error
+	buf, err = opts.MarshalAppend(buf, m)
+	if err != nil {
+		*bp = buf
+		marshalBufPool.Put(bp)
+		return nil, err
+	}
+
+	out := make([]byte, len(buf))
+	copy(out, buf)
+	*bp = buf
+	marshalBufPool.Put(bp)
 	return out, nil
 }
 
