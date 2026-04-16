@@ -31,6 +31,36 @@ coap:
   # Listen address for the CoAP adapter (UDP, RFC 7252). Standard port is 5683.
   listen: ":5683"
 
+modbus:
+  # Modbus TCP endpoint.
+  host: ""
+  port: 502
+  # Poll interval for register reads.
+  poll_interval_ms: 1000
+  # Register list:
+  # type: coil | holding | input
+  registers: []
+  # Example:
+  # registers:
+  #   - name: "temperature_raw"
+  #     address: 0
+  #     type: "holding"
+  #     device_id: "modbus-sensor-01"
+
+websocket:
+  # WebSocket ingest adapter listen address.
+  # Device path: ws://<host>:<port>/ws/<device_id>
+  listen: ""
+
+amqp:
+  # RabbitMQ connection URL.
+  url: ""
+  queue: ""
+  exchange: ""
+  routing_key: ""
+  # JSON field name used to read device_id from each AMQP payload.
+  device_id_field: "device_id"
+
 ui:
   # Read-only web UI listen address.
   listen: ":8081"

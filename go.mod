@@ -6,8 +6,8 @@ require (
 	github.com/d5/tengo/v2 v2.17.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/fsnotify/fsnotify v1.9.0
-	github.com/nats-io/nats.go v1.49.0
 	github.com/nats-io/nats-server/v2 v2.12.6
+	github.com/nats-io/nats.go v1.49.0
 	github.com/plgd-dev/go-coap/v3 v3.4.2
 	github.com/prometheus/client_golang v1.23.2
 	google.golang.org/protobuf v1.36.8
@@ -21,6 +21,8 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dsnet/golib/memfile v1.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/goburrow/modbus v0.1.0 // indirect
+	github.com/goburrow/serial v0.1.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
@@ -39,6 +41,7 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect

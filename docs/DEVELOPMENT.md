@@ -265,7 +265,27 @@
     - `clean` target uses `rm -f` (POSIX utility, not native PowerShell/cmd).
 
 ## Planned Phases
-_Placeholder. To be filled in next phase prompt._
+- [x] Phase 1: Add incoming adapters
+  - [x] Modbus TCP adapter (`internal/adapter/modbus.go`)
+  - [x] WebSocket adapter (`internal/adapter/websocket.go`)
+  - [x] AMQP adapter (`internal/adapter/amqp.go`)
+  - [x] Gateway wiring + config surface updates
+  - [x] Smoke-test documentation
+- [ ] Phase 2+: _TBD in next prompts_
 
 ## Change Log
-
+### Phase 1 — 2026-04-16
+- Created:
+  - `internal/adapter/modbus.go`
+  - `internal/adapter/websocket.go`
+  - `internal/adapter/amqp.go`
+  - `docs/SMOKE_TESTS.md`
+- Modified:
+  - `internal/gateway/gateway.go`
+  - `config/config.yaml`
+  - `go.mod`
+  - `go.sum`
+  - `docs/DEVELOPMENT.md`
+- Deviations from plan:
+  - New adapters are conditionally started only when minimally configured (`modbus.host + registers`, `websocket.listen`, `amqp.url + queue`) so default config remains runnable.
+  - No standalone adapter factory existed; adapters added to gateway adapter startup list.

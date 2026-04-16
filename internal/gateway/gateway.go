@@ -31,6 +31,9 @@ type Config struct {
 	MQTT             adaptmqtt.Config          `yaml:"mqtt"`
 	HTTP             adapthttp.Config          `yaml:"http"`
 	CoAP             adaptcoap.Config          `yaml:"coap"`
+	Modbus           adapter.ModbusConfig      `yaml:"modbus"`
+	WebSocket        adapter.WebSocketConfig   `yaml:"websocket"`
+	AMQP             adapter.AMQPConfig        `yaml:"amqp"`
 	Registry         RegistryConfig            `yaml:"registry"`
 	Policy           policy.Config             `yaml:"policy"`
 	Pipelines        []pipeline.PipelineConfig `yaml:"pipelines"`
@@ -165,6 +168,15 @@ func Run(configPath string) error {
 		adaptmqtt.New(cfg.MQTT),
 		httpAdapter,
 		adaptcoap.New(cfg.CoAP),
+	}
+	if cfg.Modbus.Host != "" && len(cfg.Modbus.Registers) > 0 {
+		adapters = append(adapters, adapter.NewModbus(cfg.Modbus))
+	}
+	if cfg.WebSocket.Listen != "" {
+		adapters = append(adapters, adapter.NewWebSocket(cfg.WebSocket))
+	}
+	if cfg.AMQP.URL != "" && cfg.AMQP.Queue != "" {
+		adapters = append(adapters, adapter.NewAMQP(cfg.AMQP))
 	}
 
 	adapterNames := make([]string, len(adapters))
