@@ -271,7 +271,13 @@
   - [x] AMQP adapter (`internal/adapter/amqp.go`)
   - [x] Gateway wiring + config surface updates
   - [x] Smoke-test documentation
-- [ ] Phase 2+: _TBD in next prompts_
+- [x] Phase 2: Add outgoing forwarders
+  - [x] MQTT re-publish forwarder (`internal/forwarder/mqtt.go`)
+  - [x] Webhook forwarder (`internal/forwarder/webhook.go`)
+  - [x] InfluxDB forwarder (`internal/forwarder/influxdb.go`)
+  - [x] Gateway forwarder lifecycle wiring
+  - [x] Forwarder smoke-test documentation
+- [ ] Phase 3+: _TBD in next prompts_
 
 ## Change Log
 ### Phase 1 — 2026-04-16
@@ -289,3 +295,20 @@
 - Deviations from plan:
   - New adapters are conditionally started only when minimally configured (`modbus.host + registers`, `websocket.listen`, `amqp.url + queue`) so default config remains runnable.
   - No standalone adapter factory existed; adapters added to gateway adapter startup list.
+
+### Phase 2 â€” 2026-04-16
+- Created:
+  - `internal/forwarder/forwarder.go`
+  - `internal/forwarder/mqtt.go`
+  - `internal/forwarder/webhook.go`
+  - `internal/forwarder/influxdb.go`
+- Modified:
+  - `internal/gateway/gateway.go`
+  - `config/config.yaml`
+  - `docs/SMOKE_TESTS.md`
+  - `docs/DEVELOPMENT.md`
+  - `go.mod`
+  - `go.sum`
+- Deviations from plan:
+  - Forwarders start only when minimally configured (`forwarders.mqtt.broker_url`, `forwarders.webhook.url`, full InfluxDB credentials) so base config remains runnable.
+  - InfluxDB batching implemented via official client write options (`batch_size=100`, `flush_interval=1s`) which satisfies required flush behavior.

@@ -61,6 +61,27 @@ amqp:
   # JSON field name used to read device_id from each AMQP payload.
   device_id_field: "device_id"
 
+forwarders:
+  mqtt:
+    # Re-publish canonical NATS traffic to external MQTT broker.
+    broker_url: ""
+    topic_template: "interlink/{{.DeviceID}}/{{.Type}}"
+    client_id: "interlink-forwarder-mqtt"
+    qos: 1
+  webhook:
+    # Forward canonical messages as JSON via HTTP.
+    url: ""
+    method: "POST"
+    headers: {}
+    # Optional glob filter on device_id (example: "sensor-*")
+    filter: ""
+  influxdb:
+    # Forward telemetry stream into InfluxDB.
+    url: ""
+    token: ""
+    org: ""
+    bucket: ""
+
 ui:
   # Read-only web UI listen address.
   listen: ":8081"

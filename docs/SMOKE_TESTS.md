@@ -61,3 +61,68 @@ amqp:
 ### 3) Verify
 - `curl -s http://127.0.0.1:8080/api/v1/devices/amqp-01/latest | jq .`
 
+## MQTT Re-publish Forwarder
+### 1) Configure forwarder
+```yaml
+forwarders:
+  mqtt:
+    broker_url: "tcp://127.0.0.1:1883"
+    topic_template: "interlink/{{.DeviceID}}/{{.Type}}"
+    client_id: "interlink-forwarder-mqtt"
+    qos: 1
+```
+
+### 2) Watch target MQTT topic
+- `mosquitto_sub -h 127.0.0.1 -p 1883 -t "interlink/+/+" -v`
+
+### 3) Emit source message into InterLink
+- `curl -s -X POST http://127.0.0.1:8080/ingest/v1/fw-mqtt-01/telemetry -H "content-type:application/json" -d "{\"metric\":\"temperature\",\"value\":31.2,\"unit\":\"C\"}"`
+
+### 4) Verify
+- `mosquitto_sub` output shows topic like: `interlink/fw-mqtt-01/telemetry ...`
+
+## Webhook Forwarder
+### 1) Start local webhook sink
+- `python -m http.server 9001`
+- Or use request-capture endpoint (example webhook.site URL).
+
+### 2) Configure forwarder
+```yaml
+forwarders:
+  webhook:
+    url: "http://127.0.0.1:9001/webhook"
+    method: "POST"
+    headers:
+      X-Source: "interlink"
+    filter: "fw-*"
+```
+
+### 3) Emit matching and non-matching device events
+- Matching:
+  - `curl -s -X POST http://127.0.0.1:8080/ingest/v1/fw-webhook-01/telemetry -H "content-type:application/json" -d "{\"metric\":\"pressure\",\"value\":100.5,\"unit\":\"kPa\"}"`
+- Non-matching:
+  - `curl -s -X POST http://127.0.0.1:8080/ingest/v1/other-01/telemetry -H "content-type:application/json" -d "{\"metric\":\"pressure\",\"value\":100.5,\"unit\":\"kPa\"}"`
+
+### 4) Verify
+- Sink receives JSON payload for `fw-webhook-01`.
+- No payload for `other-01`.
+
+## InfluxDB Forwarder
+### 1) Configure forwarder
+```yaml
+forwarders:
+  influxdb:
+    url: "http://127.0.0.1:8086"
+    token: "your-token"
+    org: "your-org"
+    bucket: "interlink"
+```
+
+### 2) Send telemetry into InterLink
+- `curl -s -X POST http://127.0.0.1:8080/ingest/v1/fw-influx-01/telemetry -H "content-type:application/json" -d "{\"metric\":\"humidity\",\"value\":61.4,\"unit\":\"%\"}"`
+
+### 3) Wait flush window
+- `sleep 2`
+
+### 4) Verify point exists
+- `influx query 'from(bucket:"interlink") |> range(start: -5m) |> filter(fn: (r) => r._measurement == "fw-influx-01")'`

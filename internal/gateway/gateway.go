@@ -19,6 +19,7 @@ import (
 	adapthttp "interlink/internal/adapter/http"
 	adaptmqtt "interlink/internal/adapter/mqtt"
 	"interlink/internal/bus"
+	"interlink/internal/forwarder"
 	"interlink/internal/metrics"
 	"interlink/internal/pipeline"
 	"interlink/internal/policy"
@@ -34,6 +35,7 @@ type Config struct {
 	Modbus           adapter.ModbusConfig      `yaml:"modbus"`
 	WebSocket        adapter.WebSocketConfig   `yaml:"websocket"`
 	AMQP             adapter.AMQPConfig        `yaml:"amqp"`
+	Forwarders       ForwardersConfig          `yaml:"forwarders"`
 	Registry         RegistryConfig            `yaml:"registry"`
 	Policy           policy.Config             `yaml:"policy"`
 	Pipelines        []pipeline.PipelineConfig `yaml:"pipelines"`
@@ -52,6 +54,12 @@ type NATSConfig struct {
 
 type RegistryConfig struct {
 	DBPath string `yaml:"db_path"`
+}
+
+type ForwardersConfig struct {
+	MQTT     forwarder.MQTTConfig     `yaml:"mqtt"`
+	Webhook  forwarder.WebhookConfig  `yaml:"webhook"`
+	InfluxDB forwarder.InfluxDBConfig `yaml:"influxdb"`
 }
 
 // Duration wraps time.Duration for YAML unmarshalling from strings like "5m".
@@ -193,6 +201,30 @@ func Run(configPath string) error {
 		slog.Info("adapter started", "component", "gateway", "adapter", a.Name())
 	}
 
+	forwarders := make([]forwarder.Forwarder, 0)
+	if cfg.Forwarders.MQTT.BrokerURL != "" {
+		mqttForwarder, err := forwarder.NewMQTT(cfg.Forwarders.MQTT)
+		if err != nil {
+			return fmt.Errorf("init mqtt forwarder: %w", err)
+		}
+		forwarders = append(forwarders, mqttForwarder)
+	}
+	if cfg.Forwarders.Webhook.URL != "" {
+		forwarders = append(forwarders, forwarder.NewWebhook(cfg.Forwarders.Webhook))
+	}
+	if cfg.Forwarders.InfluxDB.URL != "" &&
+		cfg.Forwarders.InfluxDB.Token != "" &&
+		cfg.Forwarders.InfluxDB.Org != "" &&
+		cfg.Forwarders.InfluxDB.Bucket != "" {
+		forwarders = append(forwarders, forwarder.NewInfluxDB(cfg.Forwarders.InfluxDB))
+	}
+	for _, fw := range forwarders {
+		if err := fw.Start(ctx, msgBus); err != nil {
+			return fmt.Errorf("start forwarder %s: %w", fw.Name(), err)
+		}
+		slog.Info("forwarder started", "component", "gateway", "forwarder", fw.Name())
+	}
+
 	var pipelines []*pipeline.Pipeline
 	for _, pc := range cfg.Pipelines {
 		pl, err := pipeline.New(pc, msgBus, reg)
@@ -274,6 +306,11 @@ func Run(configPath string) error {
 	for _, a := range adapters {
 		if err := a.Stop(shutdownCtx); err != nil {
 			slog.Error("error stopping adapter", "component", "gateway", "adapter", a.Name(), "error", err)
+		}
+	}
+	for _, fw := range forwarders {
+		if err := fw.Stop(shutdownCtx); err != nil {
+			slog.Error("error stopping forwarder", "component", "gateway", "forwarder", fw.Name(), "error", err)
 		}
 	}
 
