@@ -13,6 +13,7 @@ import (
 
 	"interlink/internal/bus"
 	"interlink/internal/canonical"
+	"interlink/internal/metrics"
 	"interlink/internal/registry"
 )
 
@@ -227,10 +228,12 @@ func (a *AMQPAdapter) handleDelivery(body []byte) {
 		slog.Error("amqp marshal failed", "component", "amqp", "device_id", deviceID, "error", err)
 		return
 	}
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 		slog.Error("amqp publish failed", "component", "amqp", "device_id", deviceID, "error", err)
 		return
 	}
+	metrics.ObserveMessageLatencyMS("amqp", "publish", time.Since(publishStart))
 
 	if err := a.reg.Register(registry.Device{
 		DeviceID: deviceID,

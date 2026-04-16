@@ -277,7 +277,13 @@
   - [x] InfluxDB forwarder (`internal/forwarder/influxdb.go`)
   - [x] Gateway forwarder lifecycle wiring
   - [x] Forwarder smoke-test documentation
-- [ ] Phase 3+: _TBD in next prompts_
+- [x] Phase 3: Load/perf tooling and latency visibility
+  - [x] Load publisher binary (`cmd/loadgen/main.go`)
+  - [x] SSE stream endpoint for loadgen latency readback (`GET /api/v1/stream`)
+  - [x] Prometheus message latency histogram metric (`interlink_message_latency_ms`)
+  - [x] Cold start benchmark script (`scripts/coldstart_bench.sh`)
+  - [x] Build/test verification including `cmd/loadgen`
+- [ ] Phase 4+: _TBD in next prompts_
 
 ## Change Log
 ### Phase 1 — 2026-04-16
@@ -312,3 +318,21 @@
 - Deviations from plan:
   - Forwarders start only when minimally configured (`forwarders.mqtt.broker_url`, `forwarders.webhook.url`, full InfluxDB credentials) so base config remains runnable.
   - InfluxDB batching implemented via official client write options (`batch_size=100`, `flush_interval=1s`) which satisfies required flush behavior.
+
+### Phase 3 — 2026-04-16
+- Created:
+  - `cmd/loadgen/main.go`
+  - `scripts/coldstart_bench.sh`
+- Modified:
+  - `internal/metrics/metrics.go`
+  - `internal/policy/policy.go`
+  - `internal/adapter/http/http.go`
+  - `internal/adapter/mqtt/mqtt.go`
+  - `internal/adapter/coap/coap.go`
+  - `internal/adapter/websocket.go`
+  - `internal/adapter/amqp.go`
+  - `internal/adapter/modbus.go`
+  - `docs/DEVELOPMENT.md`
+- Deviations from plan:
+  - `chmod +x` command unavailable in Windows PowerShell; executable bit applied via `git update-index --add --chmod=+x scripts/coldstart_bench.sh`.
+  - SSE latency readback implemented with new global stream endpoint `GET /api/v1/stream` to satisfy loadgen subscription requirement.

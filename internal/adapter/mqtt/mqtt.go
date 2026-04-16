@@ -190,6 +190,7 @@ func (a *Adapter) processMessage(msg mqttMsg) {
 		slog.Error("publish error", "component", "mqtt", "device_id", msg.deviceID, "error", err)
 		return
 	}
+	metrics.ObserveMessageLatencyMS("mqtt", "publish", time.Since(publishStart))
 	metrics.MessageProcessingDuration.WithLabelValues("mqtt", "publish").Observe(time.Since(publishStart).Seconds())
 	metrics.RecordPublish("mqtt")
 
@@ -236,10 +237,13 @@ func (a *Adapter) convertPayload(deviceID string, raw []byte) (*canonical.Messag
 	if err := json.Unmarshal(raw, &top); err != nil {
 		return nil, fmt.Errorf("payload is not valid JSON: %w (raw=%q)", err, string(raw))
 	}
+	metadata := extractStringMetadata(top["metadata"])
 
 	for key, val := range top {
 		if num, ok := toFloat64(val); ok {
-			return canonical.NewTelemetryMessage(deviceID, "mqtt", key, num, ""), nil
+			msg := canonical.NewTelemetryMessage(deviceID, "mqtt", key, num, "")
+			msg.Metadata = metadata
+			return msg, nil
 		}
 	}
 
@@ -251,7 +255,9 @@ func (a *Adapter) convertPayload(deviceID string, raw []byte) (*canonical.Messag
 		for innerKey, innerVal := range nested {
 			if num, ok := toFloat64(innerVal); ok {
 				metric := outerKey + "." + innerKey
-				return canonical.NewTelemetryMessage(deviceID, "mqtt", metric, num, ""), nil
+				msg := canonical.NewTelemetryMessage(deviceID, "mqtt", metric, num, "")
+				msg.Metadata = metadata
+				return msg, nil
 			}
 		}
 	}
@@ -268,4 +274,26 @@ func toFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func extractStringMetadata(v any) map[string]string {
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]string)
+	for k, raw := range obj {
+		switch val := raw.(type) {
+		case string:
+			out[k] = val
+		case fmt.Stringer:
+			out[k] = val.String()
+		default:
+			out[k] = fmt.Sprintf("%v", val)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

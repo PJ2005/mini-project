@@ -148,7 +148,12 @@ func (e *Engine) processWorkItem(item policyWorkItem) {
 
 func (e *Engine) Evaluate(msg *canonical.Message) bool {
 	start := time.Now()
+	adapter := msg.GetSourceProto()
+	if adapter == "" {
+		adapter = "unknown"
+	}
 	defer func() {
+		metrics.ObserveMessageLatencyMS(adapter, "policy", time.Since(start))
 		metrics.PolicyEvalDuration.Observe(time.Since(start).Seconds())
 	}()
 

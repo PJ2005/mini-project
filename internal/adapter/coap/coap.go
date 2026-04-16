@@ -88,9 +88,10 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 
 	unmarshalStart := time.Now()
 	var payload struct {
-		Metric string  `json:"metric"`
-		Value  float64 `json:"value"`
-		Unit   string  `json:"unit"`
+		Metric   string            `json:"metric"`
+		Value    float64           `json:"value"`
+		Unit     string            `json:"unit"`
+		Metadata map[string]string `json:"metadata,omitempty"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		setResponse(w, codes.BadRequest, "invalid json")
@@ -100,6 +101,7 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 
 	marshalStart := time.Now()
 	msg := canonical.NewTelemetryMessage(deviceID, "coap", payload.Metric, payload.Value, payload.Unit)
+	msg.Metadata = payload.Metadata
 	data, err := canonical.MarshalPooled(msg)
 	if err != nil {
 		setResponse(w, codes.InternalServerError, "marshal failed")
@@ -112,6 +114,7 @@ func (a *Adapter) handleTelemetry(w mux.ResponseWriter, req *mux.Message) {
 		setResponse(w, codes.InternalServerError, "publish failed")
 		return
 	}
+	metrics.ObserveMessageLatencyMS("coap", "publish", time.Since(publishStart))
 	metrics.MessageProcessingDuration.WithLabelValues("coap", "publish").Observe(time.Since(publishStart).Seconds())
 	metrics.RecordPublish("coap")
 

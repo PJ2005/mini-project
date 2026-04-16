@@ -33,6 +33,12 @@ var (
 		Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
 	}, []string{"adapter", "stage"})
 
+	MessageLatencyMS = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "interlink_message_latency_ms",
+		Help:    "Per-adapter message latency by processing stage, in milliseconds",
+		Buckets: []float64{0.01, 0.05, 0.1, 0.5, 1, 2.5, 5, 10, 25, 50},
+	}, []string{"adapter", "stage"})
+
 	NATSPublishDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name:    "interlink_nats_publish_seconds",
 		Help:    "NATS publish latency",
@@ -167,6 +173,14 @@ func RecordPublish(adapter string) {
 	getAdapterCounter(adapter).Published.Add(1)
 }
 
+// ObserveMessageLatencyMS records per-stage per-adapter latency in milliseconds.
+func ObserveMessageLatencyMS(adapter, stage string, d time.Duration) {
+	if adapter == "" || stage == "" {
+		return
+	}
+	MessageLatencyMS.WithLabelValues(adapter, stage).Observe(d.Seconds() * 1000)
+}
+
 // GetAdapterCounts returns received/published counts for the /health endpoint.
 func GetAdapterCounts() map[string][2]int64 {
 	result := make(map[string][2]int64)
@@ -191,6 +205,7 @@ func Init() {
 		MessagesReceived,
 		// Latency
 		MessageProcessingDuration,
+		MessageLatencyMS,
 		NATSPublishDuration,
 		HTTPRequestDuration,
 		PolicyEvalDuration,

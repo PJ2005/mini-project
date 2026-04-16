@@ -13,6 +13,7 @@ import (
 
 	"interlink/internal/bus"
 	"interlink/internal/canonical"
+	"interlink/internal/metrics"
 	"interlink/internal/registry"
 )
 
@@ -158,6 +159,7 @@ func (a *ModbusAdapter) pollRegister(client modbus.Client, r ModbusRegisterConfi
 		return
 	}
 
+	publishStart := time.Now()
 	if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 		slog.Error("modbus publish failed",
 			"component", "modbus",
@@ -166,6 +168,7 @@ func (a *ModbusAdapter) pollRegister(client modbus.Client, r ModbusRegisterConfi
 			"error", err)
 		return
 	}
+	metrics.ObserveMessageLatencyMS("modbus", "publish", time.Since(publishStart))
 
 	if err := a.reg.Register(registry.Device{
 		DeviceID: r.DeviceID,

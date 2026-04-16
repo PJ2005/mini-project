@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/websocket"
 
 	"interlink/internal/bus"
 	"interlink/internal/canonical"
+	"interlink/internal/metrics"
 	"interlink/internal/registry"
 )
 
@@ -30,9 +32,10 @@ type WebSocketAdapter struct {
 }
 
 type wsIngestPayload struct {
-	Metric string  `json:"metric"`
-	Value  float64 `json:"value"`
-	Unit   string  `json:"unit"`
+	Metric   string            `json:"metric"`
+	Value    float64           `json:"value"`
+	Unit     string            `json:"unit"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 func NewWebSocket(cfg WebSocketConfig) *WebSocketAdapter {
@@ -113,15 +116,18 @@ func (a *WebSocketAdapter) handleConn(conn *websocket.Conn) {
 		}
 
 		msg := canonical.NewTelemetryMessage(deviceID, "websocket", payload.Metric, payload.Value, payload.Unit)
+		msg.Metadata = payload.Metadata
 		data, err := canonical.MarshalPooled(msg)
 		if err != nil {
 			slog.Error("websocket marshal failed", "component", "websocket", "device_id", deviceID, "error", err)
 			continue
 		}
+		publishStart := time.Now()
 		if err := a.bus.Publish(canonical.Subject(msg), data); err != nil {
 			slog.Error("websocket publish failed", "component", "websocket", "device_id", deviceID, "error", err)
 			continue
 		}
+		metrics.ObserveMessageLatencyMS("websocket", "publish", time.Since(publishStart))
 
 		if err := a.reg.Register(registry.Device{
 			DeviceID: deviceID,
